@@ -16,6 +16,8 @@
 coverage.*
 *.coverprofile
 profile.cov
+coverage.txt
+coverage.html
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
@@ -24,9 +26,31 @@ profile.cov
 go.work
 go.work.sum
 
-# env file
+# Environment files
 .env
+.env.local
+.env.*.local
 
 # Editor/IDE
-# .idea/
-# .vscode/
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS specific files
+.DS_Store
+Thumbs.db
+
+# Build output
+bin/
+dist/
+build/
+
+# Private keys and secrets
+*.key
+*.pem
+*_private_key*
+*_secret*
+credentials.json
+config.yaml
