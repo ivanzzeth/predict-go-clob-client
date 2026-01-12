@@ -2,13 +2,25 @@ package predictclob
 
 import (
 	"fmt"
+	"math/big"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/imroc/req/v3"
+	"github.com/ivanzzeth/ethclient"
 	"github.com/ivanzzeth/predict-go-clob-client/constants"
+	predictcontracts "github.com/ivanzzeth/predict-go-contracts"
+	"github.com/ivanzzeth/predict-go-contracts/signer"
+	"github.com/ivanzzeth/predict-go-order-utils/pkg/builder"
 )
+
+// Signer interface for order signing operations (re-exported from builder package)
+type Signer = builder.Signer
+
+// EOATradingSigner interface for chain operations (re-exported from signer package)
+type EOATradingSigner = signer.EOATradingSigner
 
 // Client is the main client for interacting with Predict.fun API
 type Client struct {
@@ -16,6 +28,17 @@ type Client struct {
 	apiKey    string
 	jwtToken  string
 	reqClient *req.Client
+
+	// Order signing
+	chainID *big.Int
+	signer  Signer         // For order signing (CLOB API)
+	funder  common.Address // Maker address (usually same as signer for EOA)
+
+	// Chain operations
+	rpcURL            string
+	eoaTradingSigner  EOATradingSigner // For chain operations (enable trading, split, merge, redeem)
+	ethClient         *ethclient.Client
+	contractInterface *predictcontracts.ContractInterface
 }
 
 // ClientConfig represents configuration for creating a client
@@ -26,6 +49,15 @@ type ClientConfig struct {
 	UserAgent  string
 	Transport  *http.Transport
 	APITimeout time.Duration
+
+	// Order signing config
+	ChainID *big.Int
+	Signer  Signer         // For order signing (CLOB API)
+	Funder  common.Address // Maker address
+
+	// Chain operations config
+	RPCURL           string
+	EOATradingSigner EOATradingSigner // For chain operations
 }
 
 // ClientOption is a function that configures a ClientConfig
@@ -67,11 +99,47 @@ func WithUserAgent(userAgent string) ClientOption {
 	}
 }
 
+// WithChainID sets the chain ID for chain operations
+func WithChainID(chainID *big.Int) ClientOption {
+	return func(cfg *ClientConfig) {
+		cfg.ChainID = chainID
+	}
+}
+
+// WithRPCURL sets the RPC URL for chain operations
+func WithRPCURL(rpcURL string) ClientOption {
+	return func(cfg *ClientConfig) {
+		cfg.RPCURL = rpcURL
+	}
+}
+
+// WithSigner sets the signer and funder address for order signing (CLOB API)
+// signer: implements builder.Signer interface for signing orders
+// funder: the maker address that will be used in orders (typically same as signer.GetAddress() for EOA)
+func WithSigner(signer Signer, funder common.Address) ClientOption {
+	return func(cfg *ClientConfig) {
+		cfg.Signer = signer
+		cfg.Funder = funder
+	}
+}
+
+// WithEOATradingSigner sets the EOA trading signer for chain operations (enable trading, split, merge, redeem)
+// signer: implements EOATradingSigner interface for signing transactions
+// funder: the maker address (typically same as signer.GetAddress() for EOA)
+func WithEOATradingSigner(signer EOATradingSigner, funder common.Address) ClientOption {
+	return func(cfg *ClientConfig) {
+		cfg.Signer = signer
+		cfg.EOATradingSigner = signer
+		cfg.Funder = funder
+	}
+}
+
 // NewClient creates a new Predict API client instance
 func NewClient(options ...ClientOption) (*Client, error) {
 	defaultConfig := &ClientConfig{
 		APIHost:    constants.DefaultAPIHost,
 		APITimeout: 30 * time.Second,
+		ChainID:    big.NewInt(56), // Default to BNB Chain mainnet
 	}
 
 	for _, option := range options {
@@ -83,12 +151,69 @@ func NewClient(options ...ClientOption) (*Client, error) {
 
 	reqClient := CreateReqClientWithProxy(defaultConfig.Transport, defaultConfig.UserAgent, defaultConfig.APITimeout)
 
-	return &Client{
-		host:      apiHost,
-		apiKey:    defaultConfig.APIKey,
-		jwtToken:  defaultConfig.JWTToken,
-		reqClient: reqClient,
-	}, nil
+	// If funder is not set but signer is, use signer's address as funder
+	funder := defaultConfig.Funder
+	if funder == (common.Address{}) && defaultConfig.Signer != nil {
+		funder = defaultConfig.Signer.GetAddress()
+	}
+	// If funder is still not set but EOATradingSigner is, use its address
+	if funder == (common.Address{}) && defaultConfig.EOATradingSigner != nil {
+		funder = defaultConfig.EOATradingSigner.GetAddress()
+	}
+
+	client := &Client{
+		host:             apiHost,
+		apiKey:           defaultConfig.APIKey,
+		jwtToken:         defaultConfig.JWTToken,
+		reqClient:        reqClient,
+		chainID:          defaultConfig.ChainID,
+		signer:           defaultConfig.Signer,
+		funder:           funder,
+		rpcURL:           defaultConfig.RPCURL,
+		eoaTradingSigner: defaultConfig.EOATradingSigner,
+	}
+
+	// Initialize contract interface if RPC URL and EOATradingSigner are provided
+	if defaultConfig.RPCURL != "" && defaultConfig.EOATradingSigner != nil {
+		if err := client.initContractInterface(); err != nil {
+			return nil, fmt.Errorf("failed to initialize contract interface: %w", err)
+		}
+	}
+
+	return client, nil
+}
+
+// initContractInterface initializes the contract interface for chain operations
+func (c *Client) initContractInterface() error {
+	if c.rpcURL == "" {
+		return fmt.Errorf("RPC URL is required for chain operations")
+	}
+	if c.eoaTradingSigner == nil {
+		return fmt.Errorf("EOATradingSigner is required for chain operations")
+	}
+
+	// Create eth client
+	ethClient, err := ethclient.Dial(c.rpcURL)
+	if err != nil {
+		return fmt.Errorf("failed to connect to RPC: %w", err)
+	}
+	c.ethClient = ethClient
+
+	// Get contract config
+	config := predictcontracts.GetContractConfig(c.chainID)
+
+	// Create contract interface with EOA signer
+	contractInterface, err := predictcontracts.NewContractInterface(
+		ethClient,
+		predictcontracts.WithContractConfig(config),
+		predictcontracts.WithEOASigner(c.eoaTradingSigner),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create contract interface: %w", err)
+	}
+
+	c.contractInterface = contractInterface
+	return nil
 }
 
 // NewReadOnlyClient creates a read-only client without authentication
@@ -123,6 +248,39 @@ func (c *Client) GetJWTToken() string {
 	return c.jwtToken
 }
 
+// GetChainID returns the chain ID
+func (c *Client) GetChainID() *big.Int {
+	return c.chainID
+}
+
+// GetSignerAddress returns the signer's address
+func (c *Client) GetSignerAddress() common.Address {
+	if c.signer == nil {
+		return common.Address{}
+	}
+	return c.signer.GetAddress()
+}
+
+// GetFunderAddress returns the funder/maker address
+func (c *Client) GetFunderAddress() common.Address {
+	return c.funder
+}
+
+// GetEOATradingSigner returns the EOA trading signer
+func (c *Client) GetEOATradingSigner() EOATradingSigner {
+	return c.eoaTradingSigner
+}
+
+// GetContractInterface returns the contract interface
+func (c *Client) GetContractInterface() *predictcontracts.ContractInterface {
+	return c.contractInterface
+}
+
+// GetEthClient returns the Ethereum client
+func (c *Client) GetEthClient() *ethclient.Client {
+	return c.ethClient
+}
+
 // doRequest sends an HTTP request without authentication
 func (c *Client) doRequest(method, path string, body []byte) ([]byte, error) {
 	url := c.host + path
@@ -140,7 +298,7 @@ func (c *Client) doRequest(method, path string, body []byte) ([]byte, error) {
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
 
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, resp.String())
 	}
 

@@ -63,13 +63,15 @@ func main() {
 		}
 	}
 
-	// Status
+	// Status (default to OPEN)
 	if len(os.Args) > 3 {
 		opts.Status = types.MarketStatus(os.Args[3])
 	}
 	if opts.Status == "" {
 		if statusStr := os.Getenv("MARKET_STATUS"); statusStr != "" {
 			opts.Status = types.MarketStatus(statusStr)
+		} else {
+			opts.Status = types.MarketStatusOpen
 		}
 	}
 

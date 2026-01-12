@@ -5,6 +5,18 @@ const (
 	DefaultAPIHost = "https://api.predict.fun"
 )
 
+// Token decimals
+const (
+	// TokenDecimals is the number of decimals for token amounts (18 for ERC20 on BNB)
+	TokenDecimals = 18
+)
+
+// Order defaults
+const (
+	// DefaultOrderExpirationSeconds is the default order expiration time in seconds (1 hour)
+	DefaultOrderExpirationSeconds = 3600
+)
+
 // API Endpoints
 const (
 	// Root endpoint
@@ -15,9 +27,13 @@ const (
 	EndpointCategoryBySlug = "/v1/categories/%s"
 
 	// Market endpoints
-	EndpointMarkets        = "/v1/markets"
-	EndpointMarketByID     = "/v1/markets/%s"
-	EndpointMarketStats    = "/v1/markets/%s/stats"
+	EndpointMarkets         = "/v1/markets"
+	EndpointMarketByID      = "/v1/markets/%s"
+	EndpointMarketStats     = "/v1/markets/%s/stats"
 	EndpointMarketOrderbook = "/v1/markets/%s/orderbook"
-	EndpointMarketSale     = "/v1/markets/%s/sale"
+	EndpointMarketSale      = "/v1/markets/%s/sale"
+
+	// Order endpoints
+	EndpointOrders       = "/v1/orders"
+	EndpointOrdersRemove = "/v1/orders/remove"
 )
