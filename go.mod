@@ -9,7 +9,7 @@ require (
 	github.com/imroc/req/v3 v3.56.0
 	github.com/ivanzzeth/ethclient v0.1.35
 	github.com/ivanzzeth/ethsig v0.1.0
-	github.com/ivanzzeth/predict-go-contracts v0.0.2
+	github.com/ivanzzeth/predict-go-contracts v0.0.4
 	github.com/ivanzzeth/predict-go-order-utils v0.0.1
 	github.com/joho/godotenv v1.5.1
 	github.com/shopspring/decimal v1.4.0
@@ -75,5 +75,3 @@ require (
 )
 
 replace github.com/ivanzzeth/predict-go-order-utils => ../predict-go-order-utils
-
-replace github.com/ivanzzeth/predict-go-contracts => ../predict-go-contracts
