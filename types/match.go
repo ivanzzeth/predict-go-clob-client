@@ -63,14 +63,14 @@ type MatchEventMarket struct {
 	IsYieldBearing         bool                  `json:"isYieldBearing"`
 	FeeRateBps             FeeRateBps            `json:"feeRateBps"`           // Handles int/string via UnmarshalJSON
 	Resolution             *MatchEventResolution `json:"resolution,omitempty"` // nullable
-	OracleQuestionID       string                `json:"oracleQuestionId"`
-	ConditionID            string                `json:"conditionId"`
-	ResolverAddress        common.Address        `json:"resolverAddress"`
-	Outcomes               []MatchEventOutcome   `json:"outcomes"`
-	QuestionIndex          *int                  `json:"questionIndex,omitempty"` // nullable
-	SpreadThreshold        float64               `json:"spreadThreshold"`
-	ShareThreshold         float64               `json:"shareThreshold"`
-	PolymarketConditionIDs []string              `json:"polymarketConditionIds"`
+	OracleQuestionID       common.Hash          `json:"oracleQuestionId"`    // common.Hash implements json.Unmarshaler
+	ConditionID            common.Hash          `json:"conditionId"`          // common.Hash implements json.Unmarshaler
+	ResolverAddress        common.Address       `json:"resolverAddress"`     // common.Address implements json.Unmarshaler
+	Outcomes               []MatchEventOutcome  `json:"outcomes"`
+	QuestionIndex          *int                 `json:"questionIndex,omitempty"` // nullable
+	SpreadThreshold        float64              `json:"spreadThreshold"`
+	ShareThreshold         float64              `json:"shareThreshold"`
+	PolymarketConditionIDs []common.Hash        `json:"polymarketConditionIds"` // []common.Hash, each implements json.Unmarshaler
 	KalshiMarketTicker     *string               `json:"kalshiMarketTicker,omitempty"` // nullable
 	CategorySlug           string                `json:"categorySlug"`
 	CreatedAt              time.Time             `json:"createdAt"`

@@ -101,7 +101,7 @@ func main() {
 	fmt.Printf("Price: %s\n", price.String())
 
 	result, err := client.PlaceOrder(&types.PlaceOrderInput{
-		MarketID: types.MarketID(marketID),
+		MarketID: types.MustMarketIDFromString(marketID),
 		TokenID:  types.TokenID(tokenID),
 		Side:     side,
 		Strategy: types.OrderStrategyLimit,

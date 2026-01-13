@@ -140,7 +140,7 @@ func (c *Client) PlaceOrder(input *types.PlaceOrderInput) (*types.PlaceOrderResu
 		TokenId:       tokenID,
 		MakerAmount:   makerAmount.BigInt().String(),
 		TakerAmount:   takerAmount.BigInt().String(),
-		FeeRateBps:    market.FeeRateBps,
+		FeeRateBps:    fmt.Sprintf("%d", market.FeeRateBps),
 		Side:          orderSide,
 		SignatureType: predictcontracts.SignatureTypeEOA,
 		Nonce:         "0",
@@ -306,7 +306,7 @@ func (c *Client) GetOrders(opts *types.GetOrdersOptions) (*types.GetOrdersRespon
 		if opts.After != "" {
 			params.Set("after", opts.After)
 		}
-		if opts.MarketID != "" {
+		if !opts.MarketID.IsZero() {
 			params.Set("marketId", opts.MarketID.String())
 		}
 		if opts.Status != "" {
@@ -379,7 +379,7 @@ func (c *Client) GetOrderMatches(opts *types.GetOrderMatchesOptions) (*types.Mat
 		if opts.CategoryID != "" {
 			params.Set("categoryId", opts.CategoryID.String())
 		}
-		if opts.MarketID != "" {
+		if !opts.MarketID.IsZero() {
 			params.Set("marketId", opts.MarketID.String())
 		}
 		if opts.MinValueUsdtWei != "" {

@@ -55,22 +55,30 @@ func (ios *IntegerOrString) BigInt() *big.Int {
 	return (*big.Int)(ios)
 }
 
-// MarketID represents a market identifier
-type MarketID string
+// MarketID represents a market identifier (reuses IntegerOrString)
+type MarketID = IntegerOrString
 
-// String returns the string representation of the ID
-func (id MarketID) String() string {
-	return string(id)
+// NewMarketIDFromString creates a MarketID from a string
+func NewMarketIDFromString(s string) (MarketID, error) {
+	bigInt := new(big.Int)
+	if _, ok := bigInt.SetString(s, 10); !ok {
+		return MarketID(*big.NewInt(0)), fmt.Errorf("cannot parse MarketID from string: %s", s)
+	}
+	return MarketID(*bigInt), nil
 }
 
-// UnmarshalJSON implements json.Unmarshaler to handle both int and string
-func (id *MarketID) UnmarshalJSON(data []byte) error {
-	var ios IntegerOrString
-	if err := json.Unmarshal(data, &ios); err != nil {
-		return err
+// MustMarketIDFromString creates a MarketID from a string, panics on error
+func MustMarketIDFromString(s string) MarketID {
+	id, err := NewMarketIDFromString(s)
+	if err != nil {
+		panic(err)
 	}
-	*id = MarketID(ios.String())
-	return nil
+	return id
+}
+
+// IsZero checks if MarketID is zero (empty)
+func (id MarketID) IsZero() bool {
+	return (*big.Int)(&id).Sign() == 0
 }
 
 // CategoryID represents a category identifier

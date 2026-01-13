@@ -51,11 +51,11 @@ func main() {
 
 	// Market ID
 	if len(os.Args) > 1 {
-		opts.MarketID = types.MarketID(os.Args[1])
+		opts.MarketID = types.MustMarketIDFromString(os.Args[1])
 	}
-	if opts.MarketID == "" {
+	if opts.MarketID.IsZero() {
 		if marketIDStr := os.Getenv("MARKET_ID"); marketIDStr != "" {
-			opts.MarketID = types.MarketID(marketIDStr)
+			opts.MarketID = types.MustMarketIDFromString(marketIDStr)
 		}
 	}
 

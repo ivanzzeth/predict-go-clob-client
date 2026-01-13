@@ -71,24 +71,25 @@ func main() {
 	}
 	for i, order := range allOrdersResp.Data {
 		fmt.Printf("  Order %d: ID=%s, Status=%s, MarketID=%s, Strategy=%s, Amount=%s (raw: %s)\n",
-			i+1, order.ID, order.Status, order.MarketID, order.Strategy, order.Amount.String(), order.RawAmount)
+			i+1, order.ID, order.Status, order.MarketID.String(), order.Strategy, order.Amount.String(), order.RawAmount)
 	}
 
 	// Example 2: Get orders by market ID
 	fmt.Println("\n=== Example 2: Get orders by market ID ===")
-	marketID := os.Getenv("MARKET_ID")
-	if marketID != "" {
+	marketIDStr := os.Getenv("MARKET_ID")
+	if marketIDStr != "" {
+		marketID := types.MustMarketIDFromString(marketIDStr)
 		opts := &types.GetOrdersOptions{
-			MarketID: types.MarketID(marketID),
+			MarketID: marketID,
 		}
 		marketOrdersResp, err := client.GetOrders(opts)
 		if err != nil {
 			log.Fatalf("Failed to get orders by market: %v", err)
 		}
-		fmt.Printf("Found %d orders for market %s\n", len(marketOrdersResp.Data), marketID)
+		fmt.Printf("Found %d orders for market %s\n", len(marketOrdersResp.Data), marketIDStr)
 		for i, order := range marketOrdersResp.Data {
 			fmt.Printf("  Order %d: ID=%s, Status=%s, MarketID=%s, Strategy=%s, Amount=%s\n",
-				i+1, order.ID, order.Status, order.MarketID, order.Strategy, order.Amount.String())
+				i+1, order.ID, order.Status, order.MarketID.String(), order.Strategy, order.Amount.String())
 		}
 	} else {
 		fmt.Println("MARKET_ID not set, skipping market filter example")
@@ -106,7 +107,7 @@ func main() {
 	fmt.Printf("Found %d open orders\n", len(openOrdersResp.Data))
 	for i, order := range openOrdersResp.Data {
 		fmt.Printf("  Order %d: ID=%s, MarketID=%s, Strategy=%s, Amount=%s, AmountFilled=%s\n",
-			i+1, order.ID, order.MarketID, order.Strategy, order.Amount.String(), order.AmountFilled.String())
+			i+1, order.ID, order.MarketID.String(), order.Strategy, order.Amount.String(), order.AmountFilled.String())
 	}
 
 	// Example 3b: Get orders by status (FILLED)
@@ -121,7 +122,7 @@ func main() {
 	fmt.Printf("Found %d filled orders\n", len(filledOrdersResp.Data))
 	for i, order := range filledOrdersResp.Data {
 		fmt.Printf("  Order %d: ID=%s, MarketID=%s, Strategy=%s, Amount=%s, AmountFilled=%s\n",
-			i+1, order.ID, order.MarketID, order.Strategy, order.Amount.String(), order.AmountFilled.String())
+			i+1, order.ID, order.MarketID.String(), order.Strategy, order.Amount.String(), order.AmountFilled.String())
 		fmt.Printf("    OrderData: Hash=%s, Maker=%s, Signer=%s, Taker=%s\n",
 			order.OrderData.Hash.Hex(), order.OrderData.Maker.Hex(), order.OrderData.Signer.Hex(), order.OrderData.Taker.Hex())
 		fmt.Printf("    OrderData: TokenID=%s, Side=%d, MakerAmount=%s, TakerAmount=%s\n",
@@ -131,19 +132,20 @@ func main() {
 
 	// Example 4: Get orders by market ID and status
 	fmt.Println("\n=== Example 4: Get orders by market ID and status ===")
-	if marketID != "" {
+	if marketIDStr != "" {
+		marketID := types.MustMarketIDFromString(marketIDStr)
 		combinedOpts := &types.GetOrdersOptions{
-			MarketID: types.MarketID(marketID),
+			MarketID: marketID,
 			Status:   types.OrderStatusOpen,
 		}
 		combinedOrdersResp, err := client.GetOrders(combinedOpts)
 		if err != nil {
 			log.Fatalf("Failed to get orders: %v", err)
 		}
-		fmt.Printf("Found %d open orders for market %s\n", len(combinedOrdersResp.Data), marketID)
+		fmt.Printf("Found %d open orders for market %s\n", len(combinedOrdersResp.Data), marketIDStr)
 		for i, order := range combinedOrdersResp.Data {
 			fmt.Printf("  Order %d: ID=%s, Status=%s, MarketID=%s, Strategy=%s, Amount=%s\n",
-				i+1, order.ID, order.Status, order.MarketID, order.Strategy, order.Amount.String())
+				i+1, order.ID, order.Status, order.MarketID.String(), order.Strategy, order.Amount.String())
 		}
 	} else {
 		fmt.Println("MARKET_ID not set, skipping combined filter example")

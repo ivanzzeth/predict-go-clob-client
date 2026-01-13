@@ -20,90 +20,39 @@ type APIBaseResponse[T any] struct {
 
 // Category is defined in category.go
 
-// Market represents a prediction market
+// Market represents a prediction market (matches API response format)
+// This is the same structure as CategoryMarket but used in GetMarkets response
 type Market struct {
-	ID             MarketID     `json:"id"`
-	Title          string       `json:"title"`
-	Question       string       `json:"question"`
-	Description    string       `json:"description,omitempty"`
-	Status         MarketStatus `json:"status"`
-	FeeRateBps     string       `json:"feeRateBps"`
-	IsNegRisk      bool         `json:"isNegRisk"`
-	IsYieldBearing bool         `json:"isYieldBearing"`
-	TokenID        TokenID      `json:"tokenId,omitempty"`
-	OutcomeTokenID TokenID      `json:"outcomeTokenId,omitempty"`
-	Outcomes       []Outcome    `json:"outcomes,omitempty"`
-	CreatedAt      time.Time    `json:"createdAt,omitempty"`
-	UpdatedAt      time.Time    `json:"updatedAt,omitempty"`
+	ID                     MarketID                  `json:"id"`          // IntegerOrString (handles int/string via UnmarshalJSON)
+	ImageURL               string                    `json:"imageUrl"`    // required
+	Title                  string                    `json:"title"`       // required
+	Question               string                    `json:"question"`    // required
+	Description            string                    `json:"description"` // required
+	Status                 MarketStatus              `json:"status"`      // enum
+	IsNegRisk              bool                      `json:"isNegRisk"`
+	IsYieldBearing         bool                      `json:"isYieldBearing"`
+	FeeRateBps             FeeRateBps                `json:"feeRateBps"`              // Handles int/string via UnmarshalJSON
+	Resolution             *CategoryMarketResolution `json:"resolution,omitempty"`    // nullable
+	OracleQuestionID       common.Hash               `json:"oracleQuestionId"`        // common.Hash implements json.Unmarshaler
+	ConditionID            common.Hash               `json:"conditionId"`             // required, common.Hash implements json.Unmarshaler
+	ResolverAddress        common.Address            `json:"resolverAddress"`         // common.Address implements json.Unmarshaler
+	Outcomes               []CategoryMarketOutcome   `json:"outcomes"`                // required
+	QuestionIndex          *int                      `json:"questionIndex,omitempty"` // nullable
+	SpreadThreshold        float64                   `json:"spreadThreshold"`
+	ShareThreshold         float64                   `json:"shareThreshold"`
+	PolymarketConditionIDs []common.Hash             `json:"polymarketConditionIds"`       // []common.Hash, each implements json.Unmarshaler
+	KalshiMarketTicker     *string                   `json:"kalshiMarketTicker,omitempty"` // nullable
+	CategorySlug           string                    `json:"categorySlug"`                 // required
+	CreatedAt              time.Time                 `json:"createdAt"`                    // date string
+	DecimalPrecision       int                       `json:"decimalPrecision"`             // enum: 2 or 3
 }
 
-// UnmarshalJSON implements custom unmarshaling for Market to handle ID and feeRateBps as number or string
-func (m *Market) UnmarshalJSON(data []byte) error {
-	type Alias Market
-	aux := &struct {
-		ID             interface{} `json:"id"`
-		Status         interface{} `json:"status"`
-		TokenID        interface{} `json:"tokenId,omitempty"`
-		OutcomeTokenID interface{} `json:"outcomeTokenId,omitempty"`
-		FeeRateBps     interface{} `json:"feeRateBps"`
-		*Alias
-	}{
-		Alias: (*Alias)(m),
-	}
-
-	if err := json.Unmarshal(data, &aux); err != nil {
-		return err
-	}
-
-	// Convert ID to MarketID
-	switch v := aux.ID.(type) {
-	case float64:
-		m.ID = MarketID(fmt.Sprintf("%.0f", v))
-	case string:
-		m.ID = MarketID(v)
-	default:
-		m.ID = MarketID(fmt.Sprintf("%v", v))
-	}
-
-	// Convert Status to MarketStatus
-	if aux.Status != nil {
-		if statusStr, ok := aux.Status.(string); ok {
-			m.Status = MarketStatus(statusStr)
-		} else {
-			m.Status = MarketStatus(fmt.Sprintf("%v", aux.Status))
-		}
-	}
-
-	// Convert TokenID
-	if aux.TokenID != nil {
-		if tokenIDStr, ok := aux.TokenID.(string); ok {
-			m.TokenID = TokenID(tokenIDStr)
-		} else {
-			m.TokenID = TokenID(fmt.Sprintf("%v", aux.TokenID))
-		}
-	}
-
-	// Convert OutcomeTokenID
-	if aux.OutcomeTokenID != nil {
-		if tokenIDStr, ok := aux.OutcomeTokenID.(string); ok {
-			m.OutcomeTokenID = TokenID(tokenIDStr)
-		} else {
-			m.OutcomeTokenID = TokenID(fmt.Sprintf("%v", aux.OutcomeTokenID))
-		}
-	}
-
-	// Convert feeRateBps to string
-	switch v := aux.FeeRateBps.(type) {
-	case float64:
-		m.FeeRateBps = fmt.Sprintf("%.0f", v)
-	case string:
-		m.FeeRateBps = v
-	default:
-		m.FeeRateBps = fmt.Sprintf("%v", v)
-	}
-
-	return nil
-}
+// Market doesn't need custom UnmarshalJSON
+// MarketID (IntegerOrString) handles int/string via its own UnmarshalJSON
+// MarketStatus is string-based, auto-handled
+// ResolverAddress (common.Address) implements json.Unmarshaler, auto-handled
+// FeeRateBps handles int/string via its own UnmarshalJSON
+// CategoryMarketOutcome and CategoryMarketResolution are defined in category.go
 
 // Outcome represents a market outcome
 type Outcome struct {
@@ -306,10 +255,15 @@ func (s *Sale) UnmarshalJSON(data []byte) error {
 
 // GetMarketsOptions represents options for getting markets
 type GetMarketsOptions struct {
-	CategoryID CategoryID
-	Limit      int
-	Offset     int
-	Status     MarketStatus // "OPEN" or "RESOLVED"
+	First *string `json:"first,omitempty"` // string to be decoded into a number
+	After *string `json:"after,omitempty"` // pagination cursor
+}
+
+// GetMarketsResponse represents the response from GetMarkets API
+type GetMarketsResponse struct {
+	Success bool     `json:"success"`
+	Cursor  *string  `json:"cursor,omitempty"` // nullable
+	Data    []Market `json:"data"`
 }
 
 // UnixTimestamp is a time.Time that unmarshals from Unix timestamp (seconds)

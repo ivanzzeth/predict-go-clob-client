@@ -71,29 +71,18 @@ func (c *Client) GetCategory(slug string) (*types.Category, error) {
 	return &response.Data, nil
 }
 
-// GetMarkets gets markets with optional filters
-// If status is "OPEN", it fetches markets from OPEN categories (same as POC)
-func (c *Client) GetMarkets(opts *types.GetMarketsOptions) ([]types.Market, error) {
-	// If status is OPEN, fetch from OPEN categories instead (same as POC)
-	if opts != nil && opts.Status == types.MarketStatusOpen {
-		return c.getMarketsFromOpenCategories(opts.Limit)
-	}
-
+// GetMarkets gets markets with optional pagination
+func (c *Client) GetMarkets(opts *types.GetMarketsOptions) (*types.GetMarketsResponse, error) {
 	path := constants.EndpointMarkets
 
 	params := url.Values{}
 	if opts != nil {
-		if opts.CategoryID != "" {
-			params.Set("categoryId", opts.CategoryID.String())
+		if opts.First != nil && *opts.First != "" {
+			params.Set("first", *opts.First)
 		}
-		if opts.Limit > 0 {
-			params.Set("limit", fmt.Sprintf("%d", opts.Limit))
+		if opts.After != nil && *opts.After != "" {
+			params.Set("after", *opts.After)
 		}
-		if opts.Offset > 0 {
-			params.Set("offset", fmt.Sprintf("%d", opts.Offset))
-		}
-		// Note: Don't pass status to API if it's not OPEN
-		// The API doesn't support status filter directly
 	}
 
 	if len(params) > 0 {
@@ -105,47 +94,16 @@ func (c *Client) GetMarkets(opts *types.GetMarketsOptions) ([]types.Market, erro
 		return nil, err
 	}
 
-	// Handle two possible response formats: array or object with markets field
-	var responseArray types.APIBaseResponse[[]types.Market]
-	if err := json.Unmarshal(respBody, &responseArray); err == nil && responseArray.Success {
-		markets := responseArray.Data
-		// Filter by status if provided (for non-OPEN status)
-		if opts != nil && opts.Status != "" && opts.Status != types.MarketStatusOpen {
-			filtered := make([]types.Market, 0)
-			for _, m := range markets {
-				if m.Status == opts.Status {
-					filtered = append(filtered, m)
-				}
-			}
-			markets = filtered
-		}
-		return markets, nil
+	var response types.GetMarketsResponse
+	if err := json.Unmarshal(respBody, &response); err != nil {
+		return nil, fmt.Errorf("failed to parse markets response: %w", err)
 	}
 
-	// Try to parse as object with markets field
-	var marketResponseObj struct {
-		Success bool `json:"success"`
-		Data    struct {
-			Markets []types.Market `json:"markets"`
-		} `json:"data"`
-		Message string `json:"message,omitempty"`
-	}
-	if err := json.Unmarshal(respBody, &marketResponseObj); err == nil && marketResponseObj.Success {
-		markets := marketResponseObj.Data.Markets
-		// Filter by status if provided (for non-OPEN status)
-		if opts != nil && opts.Status != "" && opts.Status != types.MarketStatusOpen {
-			filtered := make([]types.Market, 0)
-			for _, m := range markets {
-				if m.Status == opts.Status {
-					filtered = append(filtered, m)
-				}
-			}
-			markets = filtered
-		}
-		return markets, nil
+	if !response.Success {
+		return nil, fmt.Errorf("API returned success=false")
 	}
 
-	return nil, fmt.Errorf("failed to parse markets from response")
+	return &response, nil
 }
 
 // getMarketsFromOpenCategories fetches markets from OPEN categories (same as POC)
@@ -165,25 +123,30 @@ func (c *Client) getMarketsFromOpenCategories(limit int) ([]types.Market, error)
 			marketID := categoryMarket.ID.String()
 			if marketID != "" && !seenIDs[marketID] {
 				seenIDs[marketID] = true
-				// Convert CategoryMarket to Market
+				// CategoryMarket and Market now have the same structure, can use directly
 				market := types.Market{
-					ID:             categoryMarket.ID,
-					Title:          categoryMarket.Title,
-					Question:       categoryMarket.Question,
-					Description:    categoryMarket.Description,
-					Status:         categoryMarket.Status,
-					FeeRateBps:     fmt.Sprintf("%d", categoryMarket.FeeRateBps),
-					IsNegRisk:      categoryMarket.IsNegRisk,
-					IsYieldBearing: categoryMarket.IsYieldBearing,
-					CreatedAt:      categoryMarket.CreatedAt,
-				}
-				// Convert outcomes
-				for _, outcome := range categoryMarket.Outcomes {
-					market.Outcomes = append(market.Outcomes, types.Outcome{
-						Name:      outcome.Name,
-						IndexSet:  outcome.IndexSet,
-						OnChainID: outcome.OnChainID,
-					})
+					ID:                     categoryMarket.ID,
+					ImageURL:               categoryMarket.ImageURL,
+					Title:                  categoryMarket.Title,
+					Question:               categoryMarket.Question,
+					Description:            categoryMarket.Description,
+					Status:                 categoryMarket.Status,
+					IsNegRisk:              categoryMarket.IsNegRisk,
+					IsYieldBearing:         categoryMarket.IsYieldBearing,
+					FeeRateBps:             categoryMarket.FeeRateBps,
+					Resolution:             categoryMarket.Resolution,
+					OracleQuestionID:       categoryMarket.OracleQuestionID,
+					ConditionID:            categoryMarket.ConditionID,
+					ResolverAddress:        categoryMarket.ResolverAddress,
+					Outcomes:               categoryMarket.Outcomes,
+					QuestionIndex:          categoryMarket.QuestionIndex,
+					SpreadThreshold:        categoryMarket.SpreadThreshold,
+					ShareThreshold:         categoryMarket.ShareThreshold,
+					PolymarketConditionIDs: categoryMarket.PolymarketConditionIDs,
+					KalshiMarketTicker:     categoryMarket.KalshiMarketTicker,
+					CategorySlug:           categoryMarket.CategorySlug,
+					CreatedAt:              categoryMarket.CreatedAt,
+					DecimalPrecision:       categoryMarket.DecimalPrecision,
 				}
 				allMarkets = append(allMarkets, market)
 			}

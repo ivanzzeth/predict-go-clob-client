@@ -26,14 +26,14 @@ func main() {
 	// Get market ID from command line or environment
 	var marketID types.MarketID
 	if len(os.Args) > 1 {
-		marketID = types.MarketID(os.Args[1])
+		marketID = types.MustMarketIDFromString(os.Args[1])
 	}
-	if marketID == "" {
+	if marketID.IsZero() {
 		if marketIDStr := os.Getenv("MARKET_ID"); marketIDStr != "" {
-			marketID = types.MarketID(marketIDStr)
+			marketID = types.MustMarketIDFromString(marketIDStr)
 		}
 	}
-	if marketID == "" {
+	if marketID.IsZero() {
 		log.Fatal("Market ID is required (provide as command line argument or MARKET_ID env var)")
 	}
 

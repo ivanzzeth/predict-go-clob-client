@@ -44,7 +44,7 @@ func (c *Client) GetPositions(opts *types.GetPositionsOptions) ([]types.Position
 
 	params := url.Values{}
 	if opts != nil {
-		if opts.MarketID != "" {
+		if !opts.MarketID.IsZero() {
 			params.Set("marketId", opts.MarketID.String())
 		}
 		if opts.First > 0 {

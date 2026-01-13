@@ -61,19 +61,8 @@ func (c *Client) SplitByMarketID(ctx context.Context, marketID types.MarketID, a
 		return common.Hash{}, fmt.Errorf("failed to get market: %w", err)
 	}
 
-	// Get condition ID from market outcomes
-	if len(market.Outcomes) == 0 {
-		return common.Hash{}, fmt.Errorf("market has no outcomes")
-	}
-
-	// Extract conditionId from the first outcome's onChainId
-	// The conditionId is derived from the tokenId
-	conditionID, err := c.getConditionIDFromMarket(market)
-	if err != nil {
-		return common.Hash{}, fmt.Errorf("failed to get conditionId: %w", err)
-	}
-
-	return c.Split(ctx, conditionID, amount, market.IsYieldBearing)
+	// Use conditionId directly from market
+	return c.Split(ctx, market.ConditionID, amount, market.IsYieldBearing)
 }
 
 // Merge merges outcome tokens back into collateral
@@ -112,13 +101,8 @@ func (c *Client) MergeByMarketID(ctx context.Context, marketID types.MarketID, a
 		return common.Hash{}, fmt.Errorf("failed to get market: %w", err)
 	}
 
-	// Get condition ID from market
-	conditionID, err := c.getConditionIDFromMarket(market)
-	if err != nil {
-		return common.Hash{}, fmt.Errorf("failed to get conditionId: %w", err)
-	}
-
-	return c.Merge(ctx, conditionID, amount, market.IsYieldBearing)
+	// Use conditionId directly from market
+	return c.Merge(ctx, market.ConditionID, amount, market.IsYieldBearing)
 }
 
 // Redeem redeems positions for a resolved market
@@ -152,48 +136,8 @@ func (c *Client) RedeemByMarketID(ctx context.Context, marketID types.MarketID) 
 		return common.Hash{}, fmt.Errorf("failed to get market: %w", err)
 	}
 
-	// Get condition ID from market
-	conditionID, err := c.getConditionIDFromMarket(market)
-	if err != nil {
-		return common.Hash{}, fmt.Errorf("failed to get conditionId: %w", err)
-	}
-
-	return c.Redeem(ctx, conditionID, market.IsYieldBearing)
-}
-
-// getConditionIDFromMarket extracts the conditionId from market data
-// The conditionId is typically embedded in the tokenId
-func (c *Client) getConditionIDFromMarket(market *types.Market) ([32]byte, error) {
-	if len(market.Outcomes) == 0 {
-		return [32]byte{}, fmt.Errorf("market has no outcomes")
-	}
-
-	// Get the first outcome's onChainId (tokenId)
-	tokenIDStr := string(market.Outcomes[0].OnChainID)
-	if tokenIDStr == "" {
-		return [32]byte{}, fmt.Errorf("outcome onChainId is empty")
-	}
-
-	// Parse tokenId as big.Int
-	tokenID, ok := new(big.Int).SetString(tokenIDStr, 10)
-	if !ok {
-		return [32]byte{}, fmt.Errorf("failed to parse tokenId: %s", tokenIDStr)
-	}
-
-	// Extract conditionId from tokenId
-	// In Gnosis CTF, tokenId = conditionId ^ (1 << indexSet)
-	// For indexSet = 1, tokenId = conditionId ^ 2
-	// So conditionId = tokenId ^ 2 (for indexSet = 1)
-	indexSet := big.NewInt(int64(market.Outcomes[0].IndexSet))
-	mask := new(big.Int).Lsh(big.NewInt(1), uint(indexSet.Uint64()))
-	conditionIDBig := new(big.Int).Xor(tokenID, mask)
-
-	// Convert to [32]byte
-	conditionIDBytes := conditionIDBig.Bytes()
-	var conditionID [32]byte
-	copy(conditionID[32-len(conditionIDBytes):], conditionIDBytes)
-
-	return conditionID, nil
+	// Use conditionId directly from market
+	return c.Redeem(ctx, market.ConditionID, market.IsYieldBearing)
 }
 
 // SplitNegRisk splits collateral into outcome tokens for a neg-risk market
