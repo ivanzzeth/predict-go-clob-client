@@ -146,8 +146,6 @@ github.com/ivanzzeth/ethclient v0.1.35 h1:QLySJK1gQl1z3W27Imbhv5Z8ao5BPaPGisGboy
 github.com/ivanzzeth/ethclient v0.1.35/go.mod h1:429cyiRRF0/atJFnCjfkgjZPEFyRgzFRQYHsakF5ifc=
 github.com/ivanzzeth/ethsig v0.1.0 h1:GTQoWgRute5+y/+7JOXT02v9wJJkmwbGojX3TK8PyDQ=
 github.com/ivanzzeth/ethsig v0.1.0/go.mod h1:ImQMZpAnI8QyfTQEyqMFVCoxK9ymPr90PTvhGeThnms=
-github.com/ivanzzeth/predict-go-contracts v0.0.2 h1:5ZmbjZ4uliWxai/QXdnv85V4UQrzMtB2C6I76ql/nHo=
-github.com/ivanzzeth/predict-go-contracts v0.0.2/go.mod h1:anWz/TKQLULZG4vUdZBWyVRM+i6qEKWVLXHNi01rfp0=
 github.com/jackpal/go-nat-pmp v1.0.2 h1:KzKSgb7qkJvOUTqYl9/Hg/me3pWgBmERKrTGD7BdWus=
 github.com/jackpal/go-nat-pmp v1.0.2/go.mod h1:QPH045xvCAeXUZOxsnwmrtiCoxIr9eob+4orBN1SBKc=
 github.com/joho/godotenv v1.5.1 h1:7eLL/+HRGLY0ldzfGMeQkb7vMd0as4CfYvUVzLqw0N0=

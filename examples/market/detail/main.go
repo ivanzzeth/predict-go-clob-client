@@ -38,8 +38,9 @@ func main() {
 	}
 
 	// Get market by ID
+	// useCache=false for detail view as we want real-time data
 	fmt.Printf("=== Getting market by ID: %s ===\n", marketID.String())
-	market, err := client.GetMarket(marketID)
+	market, err := client.GetMarket(marketID, false)
 	if err != nil {
 		log.Fatalf("Failed to get market: %v", err)
 	}

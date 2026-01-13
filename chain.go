@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ivanzzeth/predict-go-clob-client/constants"
 	"github.com/ivanzzeth/predict-go-clob-client/types"
 	"github.com/shopspring/decimal"
 )
@@ -27,24 +28,50 @@ func (c *Client) EnableTrading(ctx context.Context) ([]common.Hash, error) {
 
 // Split splits collateral into outcome tokens for a market
 // amount is in human-readable decimal format (e.g., "1.5" means 1.5 USDT)
-// isYieldBearing specifies whether to use Yield Bearing contracts
-func (c *Client) Split(ctx context.Context, conditionID [32]byte, amount decimal.Decimal, isYieldBearing bool) (common.Hash, error) {
+// Uses cache if enabled (useCache=true) as split only needs conditionID and isYieldBearing
+// Automatically uses SplitNegRisk if market.IsNegRisk is true
+func (c *Client) Split(ctx context.Context, marketID types.MarketID, amount decimal.Decimal) (common.Hash, error) {
 	if c.contractInterface == nil {
 		return common.Hash{}, fmt.Errorf("contract interface is not initialized. Please provide RPC URL and signer when creating the client")
 	}
 
-	// Convert amount to wei (18 decimals for USDT on BNB)
-	amountWei := amount.Shift(18).BigInt()
+	// Get market details to retrieve conditionId, isYieldBearing, and isNegRisk
+	// useCache=true for split/merge/redeem operations as they only need conditionID and isYieldBearing
+	market, err := c.GetMarket(marketID, true)
+	if err != nil {
+		return common.Hash{}, fmt.Errorf("failed to get market: %w", err)
+	}
 
+	// Convert amount to wei (TokenDecimals decimals for USDT on BNB)
+	amountWei := amount.Shift(constants.TokenDecimals).BigInt()
+
+	// Use NegRisk methods if market is neg-risk
+	if market.IsNegRisk {
+		// Get the appropriate adapter address based on isYieldBearing
+		var negRiskAdapterAddr common.Address
+		if market.IsYieldBearing {
+			negRiskAdapterAddr = c.contractInterface.GetConfig().YieldBearingNegRiskAdapter
+		} else {
+			negRiskAdapterAddr = c.contractInterface.GetConfig().NegRiskAdapter
+		}
+
+		txHash, err := c.contractInterface.SplitNegRisk(ctx, negRiskAdapterAddr, market.ConditionID, amountWei)
+		if err != nil {
+			return common.Hash{}, fmt.Errorf("failed to split neg-risk: %w", err)
+		}
+		return txHash, nil
+	}
+
+	// Use regular split for non-neg-risk markets
 	// Get the appropriate contract address based on isYieldBearing
 	var ctfAddr common.Address
-	if isYieldBearing {
+	if market.IsYieldBearing {
 		ctfAddr = c.contractInterface.GetConfig().YieldBearingConditionalTokens
 	} else {
 		ctfAddr = c.contractInterface.GetConfig().ConditionalTokens
 	}
 
-	txHash, err := c.contractInterface.Split(ctx, ctfAddr, conditionID, amountWei)
+	txHash, err := c.contractInterface.Split(ctx, ctfAddr, market.ConditionID, amountWei)
 	if err != nil {
 		return common.Hash{}, fmt.Errorf("failed to split: %w", err)
 	}
@@ -52,39 +79,52 @@ func (c *Client) Split(ctx context.Context, conditionID [32]byte, amount decimal
 	return txHash, nil
 }
 
-// SplitByMarketID splits collateral into outcome tokens using market ID
-// amount is in human-readable decimal format (e.g., "1.5" means 1.5 USDT)
-func (c *Client) SplitByMarketID(ctx context.Context, marketID types.MarketID, amount decimal.Decimal) (common.Hash, error) {
-	// Get market details to retrieve conditionId and isYieldBearing
-	market, err := c.GetMarket(marketID)
-	if err != nil {
-		return common.Hash{}, fmt.Errorf("failed to get market: %w", err)
-	}
-
-	// Use conditionId directly from market
-	return c.Split(ctx, market.ConditionID, amount, market.IsYieldBearing)
-}
-
 // Merge merges outcome tokens back into collateral
 // amount is in human-readable decimal format (e.g., "1.5" means 1.5 tokens)
-// isYieldBearing specifies whether to use Yield Bearing contracts
-func (c *Client) Merge(ctx context.Context, conditionID [32]byte, amount decimal.Decimal, isYieldBearing bool) (common.Hash, error) {
+// Uses cache if enabled (useCache=true) as merge only needs conditionID and isYieldBearing
+// Automatically uses MergeNegRisk if market.IsNegRisk is true
+func (c *Client) Merge(ctx context.Context, marketID types.MarketID, amount decimal.Decimal) (common.Hash, error) {
 	if c.contractInterface == nil {
 		return common.Hash{}, fmt.Errorf("contract interface is not initialized. Please provide RPC URL and signer when creating the client")
 	}
 
-	// Convert amount to wei (18 decimals)
-	amountWei := amount.Shift(18).BigInt()
+	// Get market details to retrieve conditionId, isYieldBearing, and isNegRisk
+	// useCache=true for split/merge/redeem operations as they only need conditionID and isYieldBearing
+	market, err := c.GetMarket(marketID, true)
+	if err != nil {
+		return common.Hash{}, fmt.Errorf("failed to get market: %w", err)
+	}
 
+	// Convert amount to wei (TokenDecimals decimals)
+	amountWei := amount.Shift(constants.TokenDecimals).BigInt()
+
+	// Use NegRisk methods if market is neg-risk
+	if market.IsNegRisk {
+		// Get the appropriate adapter address based on isYieldBearing
+		var negRiskAdapterAddr common.Address
+		if market.IsYieldBearing {
+			negRiskAdapterAddr = c.contractInterface.GetConfig().YieldBearingNegRiskAdapter
+		} else {
+			negRiskAdapterAddr = c.contractInterface.GetConfig().NegRiskAdapter
+		}
+
+		txHash, err := c.contractInterface.MergeNegRisk(ctx, negRiskAdapterAddr, market.ConditionID, amountWei)
+		if err != nil {
+			return common.Hash{}, fmt.Errorf("failed to merge neg-risk: %w", err)
+		}
+		return txHash, nil
+	}
+
+	// Use regular merge for non-neg-risk markets
 	// Get the appropriate contract address based on isYieldBearing
 	var ctfAddr common.Address
-	if isYieldBearing {
+	if market.IsYieldBearing {
 		ctfAddr = c.contractInterface.GetConfig().YieldBearingConditionalTokens
 	} else {
 		ctfAddr = c.contractInterface.GetConfig().ConditionalTokens
 	}
 
-	txHash, err := c.contractInterface.Merge(ctx, ctfAddr, conditionID, amountWei)
+	txHash, err := c.contractInterface.Merge(ctx, ctfAddr, market.ConditionID, amountWei)
 	if err != nil {
 		return common.Hash{}, fmt.Errorf("failed to merge: %w", err)
 	}
@@ -92,52 +132,58 @@ func (c *Client) Merge(ctx context.Context, conditionID [32]byte, amount decimal
 	return txHash, nil
 }
 
-// MergeByMarketID merges outcome tokens back into collateral using market ID
-// amount is in human-readable decimal format (e.g., "1.5" means 1.5 tokens)
-func (c *Client) MergeByMarketID(ctx context.Context, marketID types.MarketID, amount decimal.Decimal) (common.Hash, error) {
-	// Get market details
-	market, err := c.GetMarket(marketID)
-	if err != nil {
-		return common.Hash{}, fmt.Errorf("failed to get market: %w", err)
-	}
-
-	// Use conditionId directly from market
-	return c.Merge(ctx, market.ConditionID, amount, market.IsYieldBearing)
-}
-
 // Redeem redeems positions for a resolved market
-// isYieldBearing specifies whether to use Yield Bearing contracts
-func (c *Client) Redeem(ctx context.Context, conditionID [32]byte, isYieldBearing bool) (common.Hash, error) {
+// Uses cache if enabled (useCache=true) as redeem only needs conditionID and isYieldBearing
+// Automatically uses RedeemNegRisk if market.IsNegRisk is true
+// amounts is required for neg-risk markets, optional (nil) for regular markets
+func (c *Client) Redeem(ctx context.Context, marketID types.MarketID, amounts []*big.Int) (common.Hash, error) {
 	if c.contractInterface == nil {
 		return common.Hash{}, fmt.Errorf("contract interface is not initialized. Please provide RPC URL and signer when creating the client")
 	}
 
+	// Get market details to retrieve conditionId, isYieldBearing, and isNegRisk
+	// useCache=true for split/merge/redeem operations as they only need conditionID and isYieldBearing
+	market, err := c.GetMarket(marketID, true)
+	if err != nil {
+		return common.Hash{}, fmt.Errorf("failed to get market: %w", err)
+	}
+
+	// Use NegRisk methods if market is neg-risk
+	if market.IsNegRisk {
+		if len(amounts) == 0 {
+			return common.Hash{}, fmt.Errorf("amounts parameter is required for neg-risk market redeem")
+		}
+
+		// Get the appropriate adapter address based on isYieldBearing
+		var negRiskAdapterAddr common.Address
+		if market.IsYieldBearing {
+			negRiskAdapterAddr = c.contractInterface.GetConfig().YieldBearingNegRiskAdapter
+		} else {
+			negRiskAdapterAddr = c.contractInterface.GetConfig().NegRiskAdapter
+		}
+
+		txHash, err := c.contractInterface.RedeemNegRisk(ctx, negRiskAdapterAddr, market.ConditionID, amounts)
+		if err != nil {
+			return common.Hash{}, fmt.Errorf("failed to redeem neg-risk: %w", err)
+		}
+		return txHash, nil
+	}
+
+	// Use regular redeem for non-neg-risk markets
 	// Get the appropriate contract address based on isYieldBearing
 	var ctfAddr common.Address
-	if isYieldBearing {
+	if market.IsYieldBearing {
 		ctfAddr = c.contractInterface.GetConfig().YieldBearingConditionalTokens
 	} else {
 		ctfAddr = c.contractInterface.GetConfig().ConditionalTokens
 	}
 
-	txHash, err := c.contractInterface.Redeem(ctx, ctfAddr, conditionID)
+	txHash, err := c.contractInterface.Redeem(ctx, ctfAddr, market.ConditionID)
 	if err != nil {
 		return common.Hash{}, fmt.Errorf("failed to redeem: %w", err)
 	}
 
 	return txHash, nil
-}
-
-// RedeemByMarketID redeems positions for a resolved market using market ID
-func (c *Client) RedeemByMarketID(ctx context.Context, marketID types.MarketID) (common.Hash, error) {
-	// Get market details
-	market, err := c.GetMarket(marketID)
-	if err != nil {
-		return common.Hash{}, fmt.Errorf("failed to get market: %w", err)
-	}
-
-	// Use conditionId directly from market
-	return c.Redeem(ctx, market.ConditionID, market.IsYieldBearing)
 }
 
 // SplitNegRisk splits collateral into outcome tokens for a neg-risk market
@@ -148,8 +194,8 @@ func (c *Client) SplitNegRisk(ctx context.Context, conditionID [32]byte, amount 
 		return common.Hash{}, fmt.Errorf("contract interface is not initialized. Please provide RPC URL and signer when creating the client")
 	}
 
-	// Convert amount to wei (18 decimals for USDT on BNB)
-	amountWei := amount.Shift(18).BigInt()
+	// Convert amount to wei (TokenDecimals decimals for USDT on BNB)
+	amountWei := amount.Shift(constants.TokenDecimals).BigInt()
 
 	// Get the appropriate contract address based on isYieldBearing
 	var negRiskAdapterAddr common.Address
@@ -175,8 +221,8 @@ func (c *Client) MergeNegRisk(ctx context.Context, conditionID [32]byte, amount 
 		return common.Hash{}, fmt.Errorf("contract interface is not initialized. Please provide RPC URL and signer when creating the client")
 	}
 
-	// Convert amount to wei (18 decimals)
-	amountWei := amount.Shift(18).BigInt()
+	// Convert amount to wei (TokenDecimals decimals)
+	amountWei := amount.Shift(constants.TokenDecimals).BigInt()
 
 	// Get the appropriate contract address based on isYieldBearing
 	var negRiskAdapterAddr common.Address

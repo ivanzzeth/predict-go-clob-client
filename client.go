@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -14,6 +15,7 @@ import (
 	"github.com/ivanzzeth/ethsig"
 	"github.com/ivanzzeth/predict-go-clob-client/constants"
 	"github.com/ivanzzeth/predict-go-clob-client/errs"
+	"github.com/ivanzzeth/predict-go-clob-client/types"
 	predictcontracts "github.com/ivanzzeth/predict-go-contracts"
 	"github.com/ivanzzeth/predict-go-contracts/signer"
 	"github.com/ivanzzeth/predict-go-order-utils/pkg/builder"
@@ -28,6 +30,12 @@ type Signer interface {
 
 // EOATradingSigner interface for chain operations (re-exported from signer package)
 type EOATradingSigner = signer.EOATradingSigner
+
+// cachedMarket represents a cached market with expiration time
+type cachedMarket struct {
+	market    *types.Market
+	expiresAt time.Time
+}
 
 // Client is the main client for interacting with Predict.fun API
 type Client struct {
@@ -46,6 +54,11 @@ type Client struct {
 	eoaTradingSigner  EOATradingSigner // For chain operations (enable trading, split, merge, redeem)
 	ethClient         *ethclient.Client
 	contractInterface *predictcontracts.ContractInterface
+
+	// Cache
+	marketCache map[string]*cachedMarket // key: marketID string
+	cacheTTL    time.Duration            // Cache TTL, 0 means no caching
+	cacheMu     sync.RWMutex             // Mutex for cache access
 }
 
 // ClientConfig represents configuration for creating a client
@@ -65,6 +78,9 @@ type ClientConfig struct {
 	// Chain operations config
 	RPCURL           string
 	EOATradingSigner EOATradingSigner // For chain operations
+
+	// Cache config
+	CacheTTL time.Duration // Cache TTL for market data, 0 means no caching (default: 0)
 }
 
 // ClientOption is a function that configures a ClientConfig
@@ -141,6 +157,15 @@ func WithEOATradingSigner(signer EOATradingSigner) ClientOption {
 	}
 }
 
+// WithCacheTTL sets the cache TTL for market data
+// ttl: time duration for cache expiration, 0 means no caching
+// For split/merge/redeem operations, caching is useful as they only need conditionID and isYieldBearing
+func WithCacheTTL(ttl time.Duration) ClientOption {
+	return func(cfg *ClientConfig) {
+		cfg.CacheTTL = ttl
+	}
+}
+
 // NewClient creates a new Predict API client instance
 func NewClient(options ...ClientOption) (*Client, error) {
 	defaultConfig := &ClientConfig{
@@ -178,6 +203,8 @@ func NewClient(options ...ClientOption) (*Client, error) {
 		funder:           funder,
 		rpcURL:           defaultConfig.RPCURL,
 		eoaTradingSigner: defaultConfig.EOATradingSigner,
+		marketCache:      make(map[string]*cachedMarket),
+		cacheTTL:         defaultConfig.CacheTTL,
 	}
 
 	// Initialize contract interface if RPC URL and EOATradingSigner are provided

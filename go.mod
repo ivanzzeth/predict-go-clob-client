@@ -75,3 +75,5 @@ require (
 )
 
 replace github.com/ivanzzeth/predict-go-order-utils => ../predict-go-order-utils
+
+replace github.com/ivanzzeth/predict-go-contracts => ../predict-go-contracts

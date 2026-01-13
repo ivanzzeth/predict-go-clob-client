@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"time"
 
 	"github.com/ivanzzeth/predict-go-clob-client/constants"
 	"github.com/ivanzzeth/predict-go-clob-client/types"
@@ -106,64 +107,32 @@ func (c *Client) GetMarkets(opts *types.GetMarketsOptions) (*types.GetMarketsRes
 	return &response, nil
 }
 
-// getMarketsFromOpenCategories fetches markets from OPEN categories (same as POC)
-func (c *Client) getMarketsFromOpenCategories(limit int) ([]types.Market, error) {
-	// Get OPEN categories
-	response, err := c.GetCategories(&types.GetCategoriesOptions{Status: types.CategoryStatusOpen})
-	if err != nil {
-		return nil, fmt.Errorf("failed to get OPEN categories: %w", err)
-	}
+// GetMarket gets a specific market by ID
+// useCache: if true and cacheTTL > 0, returns cached market if available and not expired
+// For split/merge/redeem operations, useCache=true is recommended as they only need conditionID and isYieldBearing
+func (c *Client) GetMarket(marketID types.MarketID, useCache bool) (*types.Market, error) {
+	marketIDStr := marketID.String()
 
-	// Extract all markets from OPEN categories
-	allMarkets := make([]types.Market, 0)
-	seenIDs := make(map[string]bool)
+	// Try cache if enabled
+	if useCache && c.cacheTTL > 0 {
+		c.cacheMu.RLock()
+		cached, exists := c.marketCache[marketIDStr]
+		c.cacheMu.RUnlock()
 
-	for _, category := range response.Data {
-		for _, categoryMarket := range category.Markets {
-			marketID := categoryMarket.ID.String()
-			if marketID != "" && !seenIDs[marketID] {
-				seenIDs[marketID] = true
-				// CategoryMarket and Market now have the same structure, can use directly
-				market := types.Market{
-					ID:                     categoryMarket.ID,
-					ImageURL:               categoryMarket.ImageURL,
-					Title:                  categoryMarket.Title,
-					Question:               categoryMarket.Question,
-					Description:            categoryMarket.Description,
-					Status:                 categoryMarket.Status,
-					IsNegRisk:              categoryMarket.IsNegRisk,
-					IsYieldBearing:         categoryMarket.IsYieldBearing,
-					FeeRateBps:             categoryMarket.FeeRateBps,
-					Resolution:             categoryMarket.Resolution,
-					OracleQuestionID:       categoryMarket.OracleQuestionID,
-					ConditionID:            categoryMarket.ConditionID,
-					ResolverAddress:        categoryMarket.ResolverAddress,
-					Outcomes:               categoryMarket.Outcomes,
-					QuestionIndex:          categoryMarket.QuestionIndex,
-					SpreadThreshold:        categoryMarket.SpreadThreshold,
-					ShareThreshold:         categoryMarket.ShareThreshold,
-					PolymarketConditionIDs: categoryMarket.PolymarketConditionIDs,
-					KalshiMarketTicker:     categoryMarket.KalshiMarketTicker,
-					CategorySlug:           categoryMarket.CategorySlug,
-					CreatedAt:              categoryMarket.CreatedAt,
-					DecimalPrecision:       categoryMarket.DecimalPrecision,
-				}
-				allMarkets = append(allMarkets, market)
+		if exists && cached != nil {
+			// Check if cache is still valid
+			if time.Now().Before(cached.expiresAt) {
+				return cached.market, nil
 			}
+			// Cache expired, remove it
+			c.cacheMu.Lock()
+			delete(c.marketCache, marketIDStr)
+			c.cacheMu.Unlock()
 		}
 	}
 
-	// Apply limit if specified
-	if limit > 0 && limit < len(allMarkets) {
-		allMarkets = allMarkets[:limit]
-	}
-
-	return allMarkets, nil
-}
-
-// GetMarket gets a specific market by ID
-func (c *Client) GetMarket(marketID types.MarketID) (*types.Market, error) {
-	path := fmt.Sprintf(constants.EndpointMarketByID, url.QueryEscape(marketID.String()))
+	// Fetch from API
+	path := fmt.Sprintf(constants.EndpointMarketByID, url.QueryEscape(marketIDStr))
 
 	respBody, err := c.doRequest("GET", path, nil, true)
 	if err != nil {
@@ -179,7 +148,19 @@ func (c *Client) GetMarket(marketID types.MarketID) (*types.Market, error) {
 		return nil, fmt.Errorf("API returned success=false: %s", response.Message)
 	}
 
-	return &response.Data, nil
+	market := &response.Data
+
+	// Update cache if enabled
+	if useCache && c.cacheTTL > 0 {
+		c.cacheMu.Lock()
+		c.marketCache[marketIDStr] = &cachedMarket{
+			market:    market,
+			expiresAt: time.Now().Add(c.cacheTTL),
+		}
+		c.cacheMu.Unlock()
+	}
+
+	return market, nil
 }
 
 // GetMarketStats gets market statistics
@@ -236,9 +217,9 @@ func (c *Client) GetMarketLastSale(marketID types.MarketID) (*types.MarketLastSa
 
 	// Handle nullable data field
 	var response struct {
-		Success bool                    `json:"success"`
-		Data    *types.MarketLastSale  `json:"data"` // nullable
-		Message string                 `json:"message,omitempty"`
+		Success bool                  `json:"success"`
+		Data    *types.MarketLastSale `json:"data"` // nullable
+		Message string                `json:"message,omitempty"`
 	}
 	if err := json.Unmarshal(respBody, &response); err != nil {
 		return nil, fmt.Errorf("failed to parse last sale response: %w", err)

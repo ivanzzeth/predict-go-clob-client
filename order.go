@@ -26,7 +26,8 @@ func (c *Client) PlaceOrder(input *types.PlaceOrderInput) (*types.PlaceOrderResu
 	}
 
 	// Get market info to get feeRateBps and other parameters
-	market, err := c.GetMarket(input.MarketID)
+	// useCache=false for order placement as we need real-time market data
+	market, err := c.GetMarket(input.MarketID, false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get market: %w", err)
 	}
