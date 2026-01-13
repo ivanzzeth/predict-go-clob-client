@@ -225,22 +225,29 @@ func (c *Client) GetMarketOrderbook(marketID types.MarketID) (*types.Orderbook, 
 }
 
 // GetMarketLastSale gets the last sale information for a market
-func (c *Client) GetMarketLastSale(marketID types.MarketID) (*types.Sale, error) {
-	path := fmt.Sprintf(constants.EndpointMarketSale, url.QueryEscape(marketID.String()))
+// Returns nil if no sale data is available (data field is null)
+func (c *Client) GetMarketLastSale(marketID types.MarketID) (*types.MarketLastSale, error) {
+	path := fmt.Sprintf(constants.EndpointMarketLastSale, url.QueryEscape(marketID.String()))
 
 	respBody, err := c.doRequest("GET", path, nil, true)
 	if err != nil {
 		return nil, err
 	}
 
-	var response types.APIBaseResponse[types.Sale]
+	// Handle nullable data field
+	var response struct {
+		Success bool                    `json:"success"`
+		Data    *types.MarketLastSale  `json:"data"` // nullable
+		Message string                 `json:"message,omitempty"`
+	}
 	if err := json.Unmarshal(respBody, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse sale response: %w", err)
+		return nil, fmt.Errorf("failed to parse last sale response: %w", err)
 	}
 
 	if !response.Success {
 		return nil, fmt.Errorf("API returned success=false: %s", response.Message)
 	}
 
-	return &response.Data, nil
+	// Return nil if data is null (no sale available)
+	return response.Data, nil
 }

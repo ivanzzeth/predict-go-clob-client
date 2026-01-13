@@ -4,10 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
-	"strconv"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ivanzzeth/predict-go-clob-client/constants"
+	"github.com/shopspring/decimal"
 )
 
 // APIBaseResponse represents the base response structure from Predict API
@@ -63,139 +64,357 @@ type Outcome struct {
 }
 
 // MarketStats represents market statistics
+// All USD amounts are stored as decimal.Decimal for precise calculations
 type MarketStats struct {
-	Volume       string `json:"volume"`
-	OpenInterest string `json:"openInterest"`
-	BidPrice     string `json:"bidPrice"`
-	AskPrice     string `json:"askPrice"`
-	LastPrice    string `json:"lastPrice"`
-	TraderCount  int    `json:"traderCount,omitempty"`
+	TotalLiquidityUsd decimal.Decimal `json:"totalLiquidityUsd"` // Total liquidity in USD (human readable decimal)
+	VolumeTotalUsd    decimal.Decimal `json:"volumeTotalUsd"`    // Total volume in USD (human readable decimal)
+	Volume24hUsd      decimal.Decimal `json:"volume24hUsd"`      // 24-hour volume in USD (human readable decimal)
 }
 
-// OrderbookLevel represents a single level in the orderbook
-type OrderbookLevel struct {
-	Price  string `json:"price"`  // Price per share (as string)
-	Amount string `json:"amount"` // Order amount (as string)
-}
-
-// Orderbook represents the orderbook for a market.
-//
-// Sorting rules (automatically applied during JSON unmarshaling):
-//   - Bids: sorted in descending order by price (highest price first, best bid at index 0)
-//     Example: [0.60, 0.55, 0.50, ...] where 0.60 is the best bid
-//   - Asks: sorted in ascending order by price (lowest price first, best ask at index 0)
-//     Example: [0.40, 0.45, 0.50, ...] where 0.40 is the best ask
-//
-// This ensures that:
-//   - Bids[0] is always the best bid (highest buy price)
-//   - Asks[0] is always the best ask (lowest sell price)
-//   - The spread can be calculated as Asks[0].Price - Bids[0].Price
-type Orderbook struct {
-	Bids []OrderbookLevel `json:"bids"` // Buy orders, sorted descending by price
-	Asks []OrderbookLevel `json:"asks"` // Sell orders, sorted ascending by price
-}
-
-// UnmarshalJSON implements custom unmarshaling for Orderbook to handle array format
-func (o *Orderbook) UnmarshalJSON(data []byte) error {
-	var raw struct {
-		Bids interface{} `json:"bids"`
-		Asks interface{} `json:"asks"`
+// UnmarshalJSON implements custom unmarshaling for MarketStats
+// decimal.Decimal supports unmarshaling from both string and number formats
+func (m *MarketStats) UnmarshalJSON(data []byte) error {
+	type Alias MarketStats
+	aux := &struct {
+		TotalLiquidityUsd interface{} `json:"totalLiquidityUsd"`
+		VolumeTotalUsd    interface{} `json:"volumeTotalUsd"`
+		Volume24hUsd      interface{} `json:"volume24hUsd"`
+		*Alias
+	}{
+		Alias: (*Alias)(m),
 	}
 
-	if err := json.Unmarshal(data, &raw); err != nil {
+	if err := json.Unmarshal(data, &aux); err != nil {
 		return err
 	}
 
-	// Convert bids
-	if bidsArray, ok := raw.Bids.([]interface{}); ok {
-		o.Bids = make([]OrderbookLevel, 0, len(bidsArray))
-		for _, item := range bidsArray {
-			if arr, ok := item.([]interface{}); ok && len(arr) >= 2 {
-				// Format: [price, amount]
-				o.Bids = append(o.Bids, OrderbookLevel{
-					Price:  fmt.Sprintf("%v", arr[0]),
-					Amount: fmt.Sprintf("%v", arr[1]),
-				})
-			} else if m, ok := item.(map[string]interface{}); ok {
-				// Format: {"price": "...", "amount": "..."}
-				price, _ := m["price"].(string)
-				amount, _ := m["amount"].(string)
-				if price == "" {
-					if priceVal, ok := m["pricePerShare"].(string); ok {
-						price = priceVal
-					}
-				}
-				if amount == "" {
-					if amountVal, ok := m["makerAmount"].(string); ok {
-						amount = amountVal
-					}
-				}
-				o.Bids = append(o.Bids, OrderbookLevel{
-					Price:  price,
-					Amount: amount,
-				})
+	// Convert TotalLiquidityUsd (can be number or string)
+	if aux.TotalLiquidityUsd != nil {
+		var totalLiquidityStr string
+		switch v := aux.TotalLiquidityUsd.(type) {
+		case string:
+			totalLiquidityStr = v
+		case float64:
+			totalLiquidityStr = fmt.Sprintf("%v", v)
+		case int:
+			totalLiquidityStr = fmt.Sprintf("%d", v)
+		case int64:
+			totalLiquidityStr = fmt.Sprintf("%d", v)
+		default:
+			totalLiquidityStr = fmt.Sprintf("%v", v)
+		}
+		if totalLiquidityStr != "" {
+			if totalLiquidity, err := decimal.NewFromString(totalLiquidityStr); err == nil {
+				m.TotalLiquidityUsd = totalLiquidity
 			}
 		}
 	}
 
-	// Convert asks
-	if asksArray, ok := raw.Asks.([]interface{}); ok {
-		o.Asks = make([]OrderbookLevel, 0, len(asksArray))
-		for _, item := range asksArray {
-			if arr, ok := item.([]interface{}); ok && len(arr) >= 2 {
-				// Format: [price, amount]
-				o.Asks = append(o.Asks, OrderbookLevel{
-					Price:  fmt.Sprintf("%v", arr[0]),
-					Amount: fmt.Sprintf("%v", arr[1]),
-				})
-			} else if m, ok := item.(map[string]interface{}); ok {
-				// Format: {"price": "...", "amount": "..."}
-				price, _ := m["price"].(string)
-				amount, _ := m["amount"].(string)
-				if price == "" {
-					if priceVal, ok := m["pricePerShare"].(string); ok {
-						price = priceVal
-					}
-				}
-				if amount == "" {
-					if amountVal, ok := m["makerAmount"].(string); ok {
-						amount = amountVal
-					}
-				}
-				o.Asks = append(o.Asks, OrderbookLevel{
-					Price:  price,
-					Amount: amount,
-				})
+	// Convert VolumeTotalUsd (can be number or string)
+	if aux.VolumeTotalUsd != nil {
+		var volumeTotalStr string
+		switch v := aux.VolumeTotalUsd.(type) {
+		case string:
+			volumeTotalStr = v
+		case float64:
+			volumeTotalStr = fmt.Sprintf("%v", v)
+		case int:
+			volumeTotalStr = fmt.Sprintf("%d", v)
+		case int64:
+			volumeTotalStr = fmt.Sprintf("%d", v)
+		default:
+			volumeTotalStr = fmt.Sprintf("%v", v)
+		}
+		if volumeTotalStr != "" {
+			if volumeTotal, err := decimal.NewFromString(volumeTotalStr); err == nil {
+				m.VolumeTotalUsd = volumeTotal
 			}
 		}
 	}
 
-	// Sort bids in descending order (highest price first, best bid at index 0)
-	sort.Slice(o.Bids, func(i, j int) bool {
-		priceI, errI := strconv.ParseFloat(o.Bids[i].Price, 64)
-		priceJ, errJ := strconv.ParseFloat(o.Bids[j].Price, 64)
-		if errI != nil || errJ != nil {
-			// If parsing fails, keep original order
-			return false
+	// Convert Volume24hUsd (can be number or string)
+	if aux.Volume24hUsd != nil {
+		var volume24hStr string
+		switch v := aux.Volume24hUsd.(type) {
+		case string:
+			volume24hStr = v
+		case float64:
+			volume24hStr = fmt.Sprintf("%v", v)
+		case int:
+			volume24hStr = fmt.Sprintf("%d", v)
+		case int64:
+			volume24hStr = fmt.Sprintf("%d", v)
+		default:
+			volume24hStr = fmt.Sprintf("%v", v)
 		}
-		return priceI > priceJ
-	})
-
-	// Sort asks in ascending order (lowest price first, best ask at index 0)
-	sort.Slice(o.Asks, func(i, j int) bool {
-		priceI, errI := strconv.ParseFloat(o.Asks[i].Price, 64)
-		priceJ, errJ := strconv.ParseFloat(o.Asks[j].Price, 64)
-		if errI != nil || errJ != nil {
-			// If parsing fails, keep original order
-			return false
+		if volume24hStr != "" {
+			if volume24h, err := decimal.NewFromString(volume24hStr); err == nil {
+				m.Volume24hUsd = volume24h
+			}
 		}
-		return priceI < priceJ
-	})
+	}
 
 	return nil
 }
 
-// Sale represents a trade/sale
+// OrderbookLevel represents a single level in the orderbook
+type OrderbookLevel struct {
+	Price     decimal.Decimal `json:"-"`      // Human readable decimal (converted from wei)
+	Amount    decimal.Decimal `json:"-"`      // Human readable decimal (converted from wei)
+	RawPrice  string          `json:"price"`  // Raw wei price as string
+	RawAmount string          `json:"amount"` // Raw wei amount as string
+}
+
+// LastOrderSettled represents the last settled order information
+type LastOrderSettled struct {
+	ID       string        `json:"id"`       // Order ID
+	Price    string        `json:"price"`    // Price as string (already in decimal format, not wei)
+	Kind     OrderStrategy `json:"kind"`     // Order strategy (MARKET or LIMIT)
+	MarketID MarketID      `json:"marketId"` // Market identifier
+	Side     OrderSide     `json:"side"`     // Order side (Bid or Ask)
+	Outcome  MarketOutcome `json:"outcome"`  // Market outcome (Yes or No)
+}
+
+// Orderbook represents the orderbook for a market.
+//
+// Sorting rules (automatically applied during JSON unmarshaling - standard orderbook practice):
+//   - Bids: sorted in descending order by price (highest price first, best bid at index 0)
+//     Example: [0.60, 0.55, 0.50, ...] where 0.60 is the best bid (Bids[0])
+//   - Asks: sorted in ascending order by price (lowest price first, best ask at index 0)
+//     Example: [0.40, 0.45, 0.50, ...] where 0.40 is the best ask (Asks[0])
+//
+// This ensures that (standard orderbook practice):
+//   - Bids[0] is always the best bid (highest buy price, bestBid)
+//   - Asks[0] is always the best ask (lowest sell price, bestAsk)
+//   - The spread can be calculated as Asks[0].Price - Bids[0].Price
+type Orderbook struct {
+	MarketID          MarketID          `json:"marketId"`                   // Market identifier
+	UpdateTimestampMs int64             `json:"updateTimestampMs"`          // Update timestamp in milliseconds
+	LastOrderSettled  *LastOrderSettled `json:"lastOrderSettled,omitempty"` // Last settled order (optional)
+	Bids              []OrderbookLevel  `json:"bids"`                       // Buy orders, sorted descending by price
+	Asks              []OrderbookLevel  `json:"asks"`                       // Sell orders, sorted ascending by price
+	BestBid           decimal.Decimal   `json:"-"`                          // Calculated: best bid price (highest buy price, Bids[0].Price if exists)
+	BestAsk           decimal.Decimal   `json:"-"`                          // Calculated: best ask price (lowest sell price, Asks[0].Price if exists)
+	Spread            decimal.Decimal   `json:"-"`                          // Calculated: spread = BestAsk - BestBid (only valid when both exist)
+}
+
+// UnmarshalJSON implements custom unmarshaling for OrderbookLevel to convert wei to decimal
+func (ol *OrderbookLevel) UnmarshalJSON(data []byte) error {
+	// Handle array format: [price, amount]
+	var arr []interface{}
+	if err := json.Unmarshal(data, &arr); err == nil && len(arr) >= 2 {
+		// Extract price and amount as numbers (can be float64 or string)
+		var priceStr, amountStr string
+
+		switch v := arr[0].(type) {
+		case float64:
+			priceStr = fmt.Sprintf("%.0f", v)
+		case string:
+			priceStr = v
+		default:
+			priceStr = fmt.Sprintf("%v", v)
+		}
+
+		switch v := arr[1].(type) {
+		case float64:
+			amountStr = fmt.Sprintf("%.0f", v)
+		case string:
+			amountStr = v
+		default:
+			amountStr = fmt.Sprintf("%v", v)
+		}
+
+		ol.RawPrice = priceStr
+		ol.RawAmount = amountStr
+
+		// Convert price from wei to decimal
+		if priceStr != "" {
+			priceWei, err := decimal.NewFromString(priceStr)
+			if err == nil {
+				ol.Price = priceWei.Shift(-constants.TokenDecimals)
+			}
+		}
+
+		// Convert amount from wei to decimal
+		if amountStr != "" {
+			amountWei, err := decimal.NewFromString(amountStr)
+			if err == nil {
+				ol.Amount = amountWei.Shift(-constants.TokenDecimals)
+			}
+		}
+
+		return nil
+	}
+
+	// Handle object format: {"price": "...", "amount": "..."}
+	type Alias OrderbookLevel
+	aux := &struct {
+		Price  interface{} `json:"price"`
+		Amount interface{} `json:"amount"`
+		*Alias
+	}{
+		Alias: (*Alias)(ol),
+	}
+
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	// Extract price
+	var priceStr string
+	switch v := aux.Price.(type) {
+	case float64:
+		priceStr = fmt.Sprintf("%.0f", v)
+	case string:
+		priceStr = v
+	default:
+		priceStr = fmt.Sprintf("%v", v)
+	}
+
+	// Extract amount
+	var amountStr string
+	switch v := aux.Amount.(type) {
+	case float64:
+		amountStr = fmt.Sprintf("%.0f", v)
+	case string:
+		amountStr = v
+	default:
+		amountStr = fmt.Sprintf("%v", v)
+	}
+
+	ol.RawPrice = priceStr
+	ol.RawAmount = amountStr
+
+	// Convert price from wei to decimal
+	if priceStr != "" {
+		priceWei, err := decimal.NewFromString(priceStr)
+		if err == nil {
+			ol.Price = priceWei.Shift(-constants.TokenDecimals)
+		}
+	}
+
+	// Convert amount from wei to decimal
+	if amountStr != "" {
+		amountWei, err := decimal.NewFromString(amountStr)
+		if err == nil {
+			ol.Amount = amountWei.Shift(-constants.TokenDecimals)
+		}
+	}
+
+	return nil
+}
+
+// UnmarshalJSON implements custom unmarshaling for Orderbook to handle array format
+func (o *Orderbook) UnmarshalJSON(data []byte) error {
+	aux := &struct {
+		MarketID          interface{}   `json:"marketId"`
+		UpdateTimestampMs interface{}   `json:"updateTimestampMs"`
+		LastOrderSettled  interface{}   `json:"lastOrderSettled,omitempty"`
+		Bids              []interface{} `json:"bids"`
+		Asks              []interface{} `json:"asks"`
+	}{}
+
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	// Convert MarketID
+	if aux.MarketID != nil {
+		var marketIDStr string
+		switch v := aux.MarketID.(type) {
+		case float64:
+			marketIDStr = fmt.Sprintf("%.0f", v)
+		case string:
+			marketIDStr = v
+		default:
+			marketIDStr = fmt.Sprintf("%v", v)
+		}
+		if marketIDStr != "" {
+			if id, err := NewMarketIDFromString(marketIDStr); err == nil {
+				o.MarketID = id
+			}
+		}
+	}
+
+	// Convert UpdateTimestampMs
+	if aux.UpdateTimestampMs != nil {
+		switch v := aux.UpdateTimestampMs.(type) {
+		case float64:
+			o.UpdateTimestampMs = int64(v)
+		case int64:
+			o.UpdateTimestampMs = v
+		case int:
+			o.UpdateTimestampMs = int64(v)
+		}
+	}
+
+	// Convert LastOrderSettled
+	if aux.LastOrderSettled != nil {
+		lastOrderData, err := json.Marshal(aux.LastOrderSettled)
+		if err == nil {
+			var lastOrder LastOrderSettled
+			if err := json.Unmarshal(lastOrderData, &lastOrder); err == nil {
+				o.LastOrderSettled = &lastOrder
+			}
+		}
+	}
+
+	// Convert bids
+	o.Bids = make([]OrderbookLevel, 0, len(aux.Bids))
+	for _, item := range aux.Bids {
+		itemData, err := json.Marshal(item)
+		if err != nil {
+			continue
+		}
+		var level OrderbookLevel
+		if err := json.Unmarshal(itemData, &level); err == nil {
+			o.Bids = append(o.Bids, level)
+		}
+	}
+
+	// Convert asks
+	o.Asks = make([]OrderbookLevel, 0, len(aux.Asks))
+	for _, item := range aux.Asks {
+		itemData, err := json.Marshal(item)
+		if err != nil {
+			continue
+		}
+		var level OrderbookLevel
+		if err := json.Unmarshal(itemData, &level); err == nil {
+			o.Asks = append(o.Asks, level)
+		}
+	}
+
+	// Sort bids in descending order (highest price first, best bid at index 0)
+	// Standard practice: bestBid = Bids[0] (highest buy price)
+	sort.Slice(o.Bids, func(i, j int) bool {
+		return o.Bids[i].Price.GreaterThan(o.Bids[j].Price)
+	})
+
+	// Sort asks in ascending order (lowest price first, best ask at index 0)
+	// Standard practice: bestAsk = Asks[0] (lowest sell price)
+	sort.Slice(o.Asks, func(i, j int) bool {
+		return o.Asks[i].Price.LessThan(o.Asks[j].Price)
+	})
+
+	// Calculate BestBid, BestAsk, and Spread (standard orderbook practice)
+	// BestBid is always at Bids[0] after descending sort
+	if len(o.Bids) > 0 {
+		o.BestBid = o.Bids[0].Price
+	}
+	// BestAsk is always at Asks[0] after ascending sort
+	if len(o.Asks) > 0 {
+		o.BestAsk = o.Asks[0].Price
+	}
+	// Spread = BestAsk - BestBid (only valid when both exist)
+	if len(o.Bids) > 0 && len(o.Asks) > 0 {
+		o.Spread = o.BestAsk.Sub(o.BestBid)
+	}
+
+	return nil
+}
+
+// Sale represents a trade/sale (deprecated, use MarketLastSale for last-sale endpoint)
 type Sale struct {
 	TransactionHash common.Hash    `json:"transactionHash"`
 	Price           string         `json:"price"`
@@ -203,6 +422,55 @@ type Sale struct {
 	Seller          common.Address `json:"seller"`
 	Buyer           common.Address `json:"buyer"`
 	Timestamp       time.Time      `json:"timestamp"`
+}
+
+// MarketOutcome represents the outcome of a market (Yes or No)
+type MarketOutcome string
+
+const (
+	MarketOutcomeYes MarketOutcome = "Yes"
+	MarketOutcomeNo  MarketOutcome = "No"
+)
+
+// String returns the string representation of the outcome
+func (o MarketOutcome) String() string {
+	return string(o)
+}
+
+// MarketLastSale represents the last sale information for a market
+// This matches the response from /v1/markets/{id}/last-sale endpoint
+type MarketLastSale struct {
+	QuoteType          QuoteType       `json:"quoteType"`       // Ask or Bid
+	Outcome            MarketOutcome   `json:"outcome"`         // Yes or No
+	PriceInCurrency    decimal.Decimal `json:"-"`               // Human readable decimal (converted from wei)
+	RawPriceInCurrency string          `json:"priceInCurrency"` // Raw wei price as string
+	Strategy           OrderStrategy   `json:"strategy"`        // MARKET or LIMIT
+}
+
+// UnmarshalJSON implements custom unmarshaling for MarketLastSale to convert wei to decimal
+func (m *MarketLastSale) UnmarshalJSON(data []byte) error {
+	type Alias MarketLastSale
+	aux := &struct {
+		PriceInCurrency string `json:"priceInCurrency"`
+		*Alias
+	}{
+		Alias: (*Alias)(m),
+	}
+
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	// Save raw value and convert PriceInCurrency from wei to decimal
+	if aux.PriceInCurrency != "" {
+		m.RawPriceInCurrency = aux.PriceInCurrency
+		priceWei, err := decimal.NewFromString(aux.PriceInCurrency)
+		if err == nil {
+			m.PriceInCurrency = priceWei.Shift(-constants.TokenDecimals)
+		}
+	}
+
+	return nil
 }
 
 // UnmarshalJSON implements custom unmarshaling for Sale to handle Address and TransactionHash conversion

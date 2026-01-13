@@ -37,12 +37,28 @@ func main() {
 		log.Fatal("Market ID is required (provide as command line argument or MARKET_ID env var)")
 	}
 
-	// Call API
-	sale, err := client.GetMarketLastSale(marketID)
+	// Get market last sale information
+	fmt.Printf("=== Getting last sale for market ID: %s ===\n", marketID.String())
+	lastSale, err := client.GetMarketLastSale(marketID)
 	if err != nil {
-		log.Fatalf("Error getting last sale: %v", err)
+		log.Fatalf("Failed to get last sale: %v", err)
 	}
 
-	// Print result using %+v to show all fields
-	fmt.Printf("Last Sale:\n%+v\n", sale)
+	// Print last sale details with all fields clearly displayed
+	printLastSale(lastSale)
+}
+
+// printLastSale prints last sale details with all fields clearly displayed
+func printLastSale(lastSale *types.MarketLastSale) {
+	if lastSale == nil {
+		fmt.Println("\n=== Last Sale Information ===")
+		fmt.Println("No sale data available (null)")
+		return
+	}
+
+	fmt.Println("\n=== Last Sale Information ===")
+	fmt.Printf("Quote Type: %s\n", lastSale.QuoteType.String())
+	fmt.Printf("Outcome: %s\n", lastSale.Outcome.String())
+	fmt.Printf("Price In Currency: %s (raw: %s)\n", lastSale.PriceInCurrency.String(), lastSale.RawPriceInCurrency)
+	fmt.Printf("Strategy: %s\n", string(lastSale.Strategy))
 }

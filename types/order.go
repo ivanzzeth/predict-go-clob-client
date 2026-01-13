@@ -18,6 +18,44 @@ const (
 	OrderSideSell OrderSide = 1
 )
 
+// String returns the string representation of OrderSide
+func (s OrderSide) String() string {
+	switch s {
+	case OrderSideBuy:
+		return "Buy"
+	case OrderSideSell:
+		return "Sell"
+	default:
+		return fmt.Sprintf("Unknown(%d)", int(s))
+	}
+}
+
+// UnmarshalJSON implements json.Unmarshaler to handle both int and string values
+func (s *OrderSide) UnmarshalJSON(data []byte) error {
+	// Try to unmarshal as int
+	var i int
+	if err := json.Unmarshal(data, &i); err == nil {
+		*s = OrderSide(i)
+		return nil
+	}
+
+	// Try to unmarshal as string
+	var str string
+	if err := json.Unmarshal(data, &str); err == nil {
+		switch str {
+		case "Buy", "BUY", "buy", "Bid", "BID", "bid":
+			*s = OrderSideBuy
+		case "Sell", "SELL", "sell", "Ask", "ASK", "ask":
+			*s = OrderSideSell
+		default:
+			return fmt.Errorf("invalid OrderSide string: %s", str)
+		}
+		return nil
+	}
+
+	return fmt.Errorf("cannot unmarshal OrderSide: %s", string(data))
+}
+
 // OrderStrategy represents the order strategy/type
 type OrderStrategy string
 

@@ -5,10 +5,10 @@ import (
 	"log"
 	"os"
 
-	"github.com/joho/godotenv"
 	predictclob "github.com/ivanzzeth/predict-go-clob-client"
 	"github.com/ivanzzeth/predict-go-clob-client/constants"
 	"github.com/ivanzzeth/predict-go-clob-client/types"
+	"github.com/joho/godotenv"
 )
 
 func main() {
@@ -43,6 +43,10 @@ func main() {
 		log.Fatalf("Error getting market stats: %v", err)
 	}
 
-	// Print result using %+v to show all fields
-	fmt.Printf("Market Stats:\n%+v\n", stats)
+	// Print result with all fields clearly displayed
+	fmt.Println("=== Market Statistics ===")
+	fmt.Printf("Total Liquidity (USD): %s\n", stats.TotalLiquidityUsd.String())
+	fmt.Printf("Total Volume (USD): %s\n", stats.VolumeTotalUsd.String())
+	fmt.Printf("24h Volume (USD): %s\n", stats.Volume24hUsd.String())
+	fmt.Println("=========================")
 }
