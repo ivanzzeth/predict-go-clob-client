@@ -11,10 +11,10 @@ import (
 type Position struct {
 	ID          PositionID      `json:"id"`
 	Market      Market          `json:"market"`
-	Amount      decimal.Decimal `json:"-"` // Human readable decimal (converted from wei)
-	ValueUsd    decimal.Decimal `json:"-"` // Human readable decimal
-	RawAmount   string          `json:"-"` // Raw wei amount as string
-	RawValueUsd string          `json:"-"` // Raw value USD as string
+	Amount      decimal.Decimal `json:"-"`        // Human readable decimal (converted from wei)
+	ValueUsd    decimal.Decimal `json:"-"`        // Human readable decimal
+	RawAmount   string          `json:"amount"`   // Raw wei amount as string
+	RawValueUsd string          `json:"valueUsd"` // Raw value USD as string
 }
 
 // UnmarshalJSON implements custom unmarshaling for Position to convert wei amounts to decimals

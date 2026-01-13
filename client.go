@@ -231,14 +231,15 @@ func (c *Client) initContractInterface() error {
 	return nil
 }
 
-// NewReadOnlyClient creates a read-only client without authentication
-func NewReadOnlyClient(apiHost string) *Client {
+// NewReadOnlyClient creates a read-only client with API key (no authentication required)
+func NewReadOnlyClient(apiHost string, apiKey string) *Client {
 	// Remove trailing slash from API host (same as Python POC)
 	apiHost = strings.TrimSuffix(apiHost, "/")
 
 	reqClient := CreateReqClientWithProxy(nil, "", 30*time.Second)
 	return &Client{
 		host:      apiHost,
+		apiKey:    apiKey,
 		reqClient: reqClient,
 	}
 }

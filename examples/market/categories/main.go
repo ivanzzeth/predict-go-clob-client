@@ -5,10 +5,10 @@ import (
 	"log"
 	"os"
 
-	"github.com/joho/godotenv"
 	predictclob "github.com/ivanzzeth/predict-go-clob-client"
 	"github.com/ivanzzeth/predict-go-clob-client/constants"
 	"github.com/ivanzzeth/predict-go-clob-client/types"
+	"github.com/joho/godotenv"
 )
 
 func main() {
@@ -17,23 +17,11 @@ func main() {
 		log.Printf("Warning: Error loading .env file: %v", err)
 	}
 
-	// Get API key from environment
+	// Get API key from environment (required)
 	apiKey := os.Getenv("PREDICT_API_KEY")
 
-	// Create client
-	var client *predictclob.Client
-	var err error
-	if apiKey != "" {
-		client, err = predictclob.NewClient(
-			predictclob.WithAPIHost(constants.DefaultAPIHost),
-			predictclob.WithAPIKey(apiKey),
-		)
-		if err != nil {
-			log.Fatalf("Failed to create client: %v", err)
-		}
-	} else {
-		client = predictclob.NewReadOnlyClient(constants.DefaultAPIHost)
-	}
+	// Create read-only client with API key
+	client := predictclob.NewReadOnlyClient(constants.DefaultAPIHost, apiKey)
 
 	// Get status filter from command line or environment
 	status := types.CategoryStatus("")

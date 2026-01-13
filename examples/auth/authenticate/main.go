@@ -7,9 +7,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ivanzzeth/ethsig"
-	"github.com/joho/godotenv"
 	predictclob "github.com/ivanzzeth/predict-go-clob-client"
 	"github.com/ivanzzeth/predict-go-clob-client/constants"
+	"github.com/joho/godotenv"
 )
 
 func main() {
@@ -32,7 +32,6 @@ func main() {
 
 	// Create signer
 	signer := ethsig.NewEthPrivateKeySigner(privateKey)
-	address := signer.GetAddress()
 
 	// Get API key from environment (optional)
 	apiKey := os.Getenv("PREDICT_API_KEY")
@@ -49,15 +48,8 @@ func main() {
 		log.Fatalf("Failed to create client: %v", err)
 	}
 
-	// Call API
-	token, address, err := client.Authenticate()
-	if err != nil {
-		log.Fatalf("Error authenticating: %v", err)
-	}
-
 	// Print result
 	fmt.Printf("Authentication successful!\n")
-	fmt.Printf("Wallet Address: %s\n", address.Hex())
-	fmt.Printf("JWT Token: %s\n", token)
-	fmt.Printf("\nAddress struct:\n%+v\n", address)
+	fmt.Printf("Funder Address: %s\n", client.GetFunderAddress().Hex())
+	fmt.Printf("JWT Token: %s\n", client.GetJWTToken())
 }

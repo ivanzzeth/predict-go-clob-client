@@ -18,7 +18,7 @@ go get github.com/ivanzzeth/predict-go-clob-client
 
 ## Quick Start
 
-### Read-Only Client (No Authentication)
+### Read-Only Client (API Key Required)
 
 ```go
 package main
@@ -26,14 +26,15 @@ package main
 import (
     "fmt"
     "log"
+    "os"
 
     "github.com/ivanzzeth/predict-go-clob-client"
     "github.com/ivanzzeth/predict-go-clob-client/constants"
 )
 
 func main() {
-    // Create a read-only client
-    client := predictclob.NewReadOnlyClient(constants.DefaultAPIHost)
+    // Create a read-only client with API key
+    client := predictclob.NewReadOnlyClient(constants.DefaultAPIHost, os.Getenv("PREDICT_API_KEY"))
 
     // Get categories
     categories, err := client.GetCategories(nil)
