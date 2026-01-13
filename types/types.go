@@ -11,60 +11,14 @@ import (
 )
 
 // APIBaseResponse represents the base response structure from Predict API
-type APIBaseResponse struct {
-	Success bool        `json:"success"`
-	Data    interface{} `json:"data"`
-	Message string      `json:"message,omitempty"`
+// Uses generics to avoid interface{} and double parsing
+type APIBaseResponse[T any] struct {
+	Success bool   `json:"success"`
+	Data    T      `json:"data"`
+	Message string `json:"message,omitempty"`
 }
 
-// Category represents a market category
-type Category struct {
-	ID             CategoryID     `json:"id"`
-	Slug           string         `json:"slug"`
-	Title          string         `json:"title"`
-	Description    string         `json:"description"`
-	Status         CategoryStatus `json:"status"`
-	IsNegRisk      bool           `json:"isNegRisk"`
-	IsYieldBearing bool           `json:"isYieldBearing"`
-	Markets        []Market       `json:"markets,omitempty"`
-}
-
-// UnmarshalJSON implements custom unmarshaling for Category to handle ID as number or string
-func (c *Category) UnmarshalJSON(data []byte) error {
-	type Alias Category
-	aux := &struct {
-		ID     interface{} `json:"id"`
-		Status interface{} `json:"status"`
-		*Alias
-	}{
-		Alias: (*Alias)(c),
-	}
-
-	if err := json.Unmarshal(data, &aux); err != nil {
-		return err
-	}
-
-	// Convert ID to CategoryID
-	switch v := aux.ID.(type) {
-	case float64:
-		c.ID = CategoryID(fmt.Sprintf("%.0f", v))
-	case string:
-		c.ID = CategoryID(v)
-	default:
-		c.ID = CategoryID(fmt.Sprintf("%v", v))
-	}
-
-	// Convert Status to CategoryStatus
-	if aux.Status != nil {
-		if statusStr, ok := aux.Status.(string); ok {
-			c.Status = CategoryStatus(statusStr)
-		} else {
-			c.Status = CategoryStatus(fmt.Sprintf("%v", aux.Status))
-		}
-	}
-
-	return nil
-}
+// Category is defined in category.go
 
 // Market represents a prediction market
 type Market struct {
@@ -348,10 +302,7 @@ func (s *Sale) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// GetCategoriesOptions represents options for getting categories
-type GetCategoriesOptions struct {
-	Status CategoryStatus // "OPEN" or "RESOLVED"
-}
+// GetCategoriesOptions is defined in category.go
 
 // GetMarketsOptions represents options for getting markets
 type GetMarketsOptions struct {

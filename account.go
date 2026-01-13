@@ -12,8 +12,8 @@ import (
 // GetAccount gets the connected account information
 // Requires JWT token authentication
 func (c *Client) GetAccount() (*types.Account, error) {
-	if c.jwtToken == "" {
-		return nil, fmt.Errorf("JWT token is required for account operations")
+	if err := c.requireJWTToken(); err != nil {
+		return nil, err
 	}
 
 	respBody, err := c.doRequest("GET", constants.EndpointAccount, nil, true)
@@ -21,34 +21,23 @@ func (c *Client) GetAccount() (*types.Account, error) {
 		return nil, fmt.Errorf("failed to get account: %w", err)
 	}
 
-	var response types.APIBaseResponse
+	var response types.APIBaseResponse[types.Account]
 	if err := json.Unmarshal(respBody, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
+		return nil, fmt.Errorf("failed to parse account response: %w", err)
 	}
 
 	if !response.Success {
 		return nil, fmt.Errorf("API returned success=false: %s", response.Message)
 	}
 
-	// Parse data as Account
-	dataBytes, err := json.Marshal(response.Data)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal data: %w", err)
-	}
-
-	var account types.Account
-	if err := json.Unmarshal(dataBytes, &account); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal account: %w", err)
-	}
-
-	return &account, nil
+	return &response.Data, nil
 }
 
 // GetPositions gets positions for the authenticated user
 // Requires JWT token authentication
 func (c *Client) GetPositions(opts *types.GetPositionsOptions) ([]types.Position, error) {
-	if c.jwtToken == "" {
-		return nil, fmt.Errorf("JWT token is required for position operations")
+	if err := c.requireJWTToken(); err != nil {
+		return nil, err
 	}
 
 	path := constants.EndpointPositions
@@ -75,34 +64,23 @@ func (c *Client) GetPositions(opts *types.GetPositionsOptions) ([]types.Position
 		return nil, fmt.Errorf("failed to get positions: %w", err)
 	}
 
-	var response types.APIBaseResponse
+	var response types.APIBaseResponse[[]types.Position]
 	if err := json.Unmarshal(respBody, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
+		return nil, fmt.Errorf("failed to parse positions response: %w", err)
 	}
 
 	if !response.Success {
 		return nil, fmt.Errorf("API returned success=false: %s", response.Message)
 	}
 
-	// Parse data as array of positions
-	dataBytes, err := json.Marshal(response.Data)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal data: %w", err)
-	}
-
-	var positions []types.Position
-	if err := json.Unmarshal(dataBytes, &positions); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal positions: %w", err)
-	}
-
-	return positions, nil
+	return response.Data, nil
 }
 
 // GetActivity gets account activity including orders, matches, conversions, merges, and splits
 // Requires JWT token authentication
 func (c *Client) GetActivity(opts *types.GetActivityOptions) (*types.ActivityResponse, error) {
-	if c.jwtToken == "" {
-		return nil, fmt.Errorf("JWT token is required for getting activity")
+	if err := c.requireJWTToken(); err != nil {
+		return nil, err
 	}
 
 	path := constants.EndpointAccountActivity

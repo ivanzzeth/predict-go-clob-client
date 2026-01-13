@@ -69,38 +69,34 @@ func main() {
 		log.Fatalf("Failed to parse private key: %v", err)
 	}
 
-	address := crypto.PubkeyToAddress(privateKey.PublicKey)
-	log.Printf("EOA Address: %s", address.Hex())
-
 	// Create EOA signer
 	eoaSigner := ethsig.NewEthPrivateKeySigner(privateKey)
+	address := eoaSigner.GetAddress()
+	log.Printf("EOA Address: %s", address.Hex())
 
 	// Get API key from environment
 	apiKey := os.Getenv("PREDICT_API_KEY")
 
-	// Create client
+	// Create client (auto-authenticates if Signer, APIKey are set and JWTToken is not)
 	client, err := predictclob.NewClient(
 		predictclob.WithChainID(big.NewInt(56)),
 		predictclob.WithAPIKey(apiKey),
-		predictclob.WithEOATradingSigner(eoaSigner, address),
+		predictclob.WithEOATradingSigner(eoaSigner),
 	)
 	if err != nil {
 		log.Fatalf("Failed to create client: %v", err)
 	}
-
-	// Authenticate
-	jwtToken, _, err := client.Authenticate(privateKeyHex)
-	if err != nil {
-		log.Fatalf("Failed to authenticate: %v", err)
-	}
-	client.SetJWTToken(jwtToken)
-	log.Printf("Authenticated successfully\n")
+	log.Printf("Client created and authenticated successfully\n")
 
 	// Place limit order
 	log.Println("=== Placing order ===")
 	fmt.Printf("Market ID: %s\n", marketID)
 	fmt.Printf("Token ID: %s\n", tokenID)
-	fmt.Printf("Side: %s\n", side)
+	sideDisplayStr := "BUY"
+	if side == types.OrderSideSell {
+		sideDisplayStr = "SELL"
+	}
+	fmt.Printf("Side: %s\n", sideDisplayStr)
 	fmt.Printf("Amount: %s shares\n", amount.String())
 	fmt.Printf("Price: %s\n", price.String())
 

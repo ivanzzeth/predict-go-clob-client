@@ -54,14 +54,18 @@ func main() {
 		}
 	}
 
-	categories, err := client.GetCategories(opts)
+	response, err := client.GetCategories(opts)
 	if err != nil {
 		log.Fatalf("Error getting categories: %v", err)
 	}
 
 	// Print result using %+v to show all fields
-	fmt.Printf("Total categories: %d\n\n", len(categories))
-	for i, category := range categories {
+	fmt.Printf("Total categories: %d\n", len(response.Data))
+	if response.Cursor != nil {
+		fmt.Printf("Next cursor: %s\n", *response.Cursor)
+	}
+	fmt.Println()
+	for i, category := range response.Data {
 		fmt.Printf("Category [%d]:\n%+v\n\n", i+1, category)
 	}
 }

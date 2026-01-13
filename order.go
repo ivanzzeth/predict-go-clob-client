@@ -204,40 +204,23 @@ func (c *Client) PlaceOrder(input *types.PlaceOrderInput) (*types.PlaceOrderResu
 	}
 
 	// Parse response
-	var response types.APIBaseResponse
+	var response types.APIBaseResponse[types.PlaceOrderResult]
 	if err := json.Unmarshal(respBody, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
+		return nil, fmt.Errorf("failed to parse place order response: %w", err)
 	}
 
 	if !response.Success {
 		return nil, fmt.Errorf("API returned success=false: %s", response.Message)
 	}
 
-	// Extract result
-	dataBytes, err := json.Marshal(response.Data)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal data: %w", err)
+	result := response.Data
+	// Handle both orderHash and hash fields
+	if result.OrderHash == "" {
+		result.OrderHash = result.Hash
 	}
+	result.Success = true
 
-	var resultData struct {
-		OrderID   string `json:"orderId"`
-		OrderHash string `json:"orderHash"`
-		Hash      string `json:"hash"`
-	}
-	if err := json.Unmarshal(dataBytes, &resultData); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal result: %w", err)
-	}
-
-	orderHashStr := resultData.OrderHash
-	if orderHashStr == "" {
-		orderHashStr = resultData.Hash
-	}
-
-	return &types.PlaceOrderResult{
-		OrderID:   resultData.OrderID,
-		OrderHash: orderHashStr,
-		Success:   true,
-	}, nil
+	return &result, nil
 }
 
 // getExchangeAddress returns the exchange contract address based on market type
@@ -365,26 +348,16 @@ func (c *Client) GetOrderByHash(orderHash string) (*types.Order, error) {
 		return nil, fmt.Errorf("failed to get order: %w", err)
 	}
 
-	var response types.APIBaseResponse
+	var response types.APIBaseResponse[types.Order]
 	if err := json.Unmarshal(respBody, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
+		return nil, fmt.Errorf("failed to parse order response: %w", err)
 	}
 
 	if !response.Success {
 		return nil, fmt.Errorf("API returned success=false: %s", response.Message)
 	}
 
-	dataBytes, err := json.Marshal(response.Data)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal data: %w", err)
-	}
-
-	var order types.Order
-	if err := json.Unmarshal(dataBytes, &order); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal order: %w", err)
-	}
-
-	return &order, nil
+	return &response.Data, nil
 }
 
 // GetOrderMatches retrieves order match events with optional filtering

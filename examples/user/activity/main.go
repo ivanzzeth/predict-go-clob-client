@@ -5,6 +5,8 @@ import (
 	"log"
 	"os"
 
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ivanzzeth/ethsig"
 	"github.com/joho/godotenv"
 	predictclob "github.com/ivanzzeth/predict-go-clob-client"
 	"github.com/ivanzzeth/predict-go-clob-client/constants"
@@ -23,28 +25,30 @@ func main() {
 		log.Fatal("PREDICT_API_KEY environment variable is required")
 	}
 
-	// Create client with API key
+	// Get private key from environment (required for authentication)
+	privateKeyHex := os.Getenv("WALLET_PRIVATE_KEY")
+	if privateKeyHex == "" {
+		log.Fatal("WALLET_PRIVATE_KEY environment variable is required")
+	}
+
+	// Parse private key and create signer
+	privateKey, err := crypto.HexToECDSA(privateKeyHex)
+	if err != nil {
+		log.Fatalf("Failed to parse private key: %v", err)
+	}
+	signer := ethsig.NewEthPrivateKeySigner(privateKey)
+	address := signer.GetAddress()
+
+	// Create client with signer (auto-authenticates if Signer, APIKey are set and JWTToken is not)
 	client, err := predictclob.NewClient(
 		predictclob.WithAPIHost(constants.DefaultAPIHost),
 		predictclob.WithAPIKey(apiKey),
+		predictclob.WithEOATradingSigner(signer),
 	)
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	// Get private key from environment (required for authentication)
-	privateKey := os.Getenv("WALLET_PRIVATE_KEY")
-	if privateKey == "" {
-		log.Fatal("WALLET_PRIVATE_KEY environment variable is required")
-	}
-
-	// Authenticate with private key
-	token, address, err := client.Authenticate(privateKey)
-	if err != nil {
-		log.Fatalf("Failed to authenticate: %v", err)
-	}
-	client.SetJWTToken(token)
-	fmt.Printf("Authenticated as: %s\n\n", address.Hex())
+	fmt.Printf("Client created and authenticated as: %s\n\n", address.Hex())
 
 	// Example 1: Get all activity (first 10)
 	fmt.Println("=== Example 1: Get account activity (first 10) ===")

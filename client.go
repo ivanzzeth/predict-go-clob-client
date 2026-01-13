@@ -11,14 +11,20 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/imroc/req/v3"
 	"github.com/ivanzzeth/ethclient"
+	"github.com/ivanzzeth/ethsig"
 	"github.com/ivanzzeth/predict-go-clob-client/constants"
+	"github.com/ivanzzeth/predict-go-clob-client/errs"
 	predictcontracts "github.com/ivanzzeth/predict-go-contracts"
 	"github.com/ivanzzeth/predict-go-contracts/signer"
 	"github.com/ivanzzeth/predict-go-order-utils/pkg/builder"
 )
 
-// Signer interface for order signing operations (re-exported from builder package)
-type Signer = builder.Signer
+// Signer interface for order signing operations
+// Extends builder.Signer with PersonalSigner interface for authentication
+type Signer interface {
+	builder.Signer
+	ethsig.PersonalSigner
+}
 
 // EOATradingSigner interface for chain operations (re-exported from signer package)
 type EOATradingSigner = signer.EOATradingSigner
@@ -127,11 +133,11 @@ func WithSigner(signer Signer, funder common.Address) ClientOption {
 // WithEOATradingSigner sets the EOA trading signer for chain operations (enable trading, split, merge, redeem)
 // signer: implements EOATradingSigner interface for signing transactions
 // funder: the maker address (typically same as signer.GetAddress() for EOA)
-func WithEOATradingSigner(signer EOATradingSigner, funder common.Address) ClientOption {
+func WithEOATradingSigner(signer EOATradingSigner) ClientOption {
 	return func(cfg *ClientConfig) {
 		cfg.Signer = signer
 		cfg.EOATradingSigner = signer
-		cfg.Funder = funder
+		cfg.Funder = signer.GetAddress()
 	}
 }
 
@@ -178,6 +184,14 @@ func NewClient(options ...ClientOption) (*Client, error) {
 	if defaultConfig.RPCURL != "" && defaultConfig.EOATradingSigner != nil {
 		if err := client.initContractInterface(); err != nil {
 			return nil, fmt.Errorf("failed to initialize contract interface: %w", err)
+		}
+	}
+
+	// Auto-authenticate if Signer and APIKey are provided, but JWTToken is not set
+	if defaultConfig.Signer != nil && defaultConfig.APIKey != "" && defaultConfig.JWTToken == "" {
+		_, _, err := client.Authenticate()
+		if err != nil {
+			return nil, fmt.Errorf("failed to auto-authenticate during client initialization: %w", err)
 		}
 	}
 
@@ -282,12 +296,32 @@ func (c *Client) GetEthClient() *ethclient.Client {
 	return c.ethClient
 }
 
+// requireAPIKey validates that API key is set in the client
+// Returns error if API key is missing
+func (c *Client) requireAPIKey() error {
+	if c.apiKey == "" {
+		return errs.ErrAPIKeyRequired
+	}
+	return nil
+}
+
+// requireJWTToken validates that JWT token is set in the client
+// Returns error if JWT token is missing
+func (c *Client) requireJWTToken() error {
+	if c.jwtToken == "" {
+		return errs.ErrJWTTokenRequired
+	}
+	return nil
+}
+
 // doRequest sends an HTTP request
 // requireAPIKey: if true, validates that API key is set before making the request
 func (c *Client) doRequest(method, path string, body []byte, requireAPIKey bool) ([]byte, error) {
 	// Validate API key if required
-	if requireAPIKey && c.apiKey == "" {
-		return nil, fmt.Errorf("API key is required for this endpoint. Use WithAPIKey option when creating client or SetAPIKey method")
+	if requireAPIKey {
+		if err := c.requireAPIKey(); err != nil {
+			return nil, err
+		}
 	}
 
 	url := c.host + path

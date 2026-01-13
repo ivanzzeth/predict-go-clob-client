@@ -9,20 +9,18 @@ require (
 	github.com/imroc/req/v3 v3.56.0
 	github.com/ivanzzeth/ethclient v0.1.35
 	github.com/ivanzzeth/ethsig v0.1.0
-	github.com/ivanzzeth/predict-go-contracts v0.0.1
+	github.com/ivanzzeth/predict-go-contracts v0.0.2
 	github.com/ivanzzeth/predict-go-order-utils v0.0.1
 	github.com/joho/godotenv v1.5.1
 	github.com/shopspring/decimal v1.4.0
 )
 
 require (
-	github.com/CoboGlobal/cobo-waas2-go-sdk v1.25.0 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/StackExchange/wmi v1.2.1 // indirect
 	github.com/VictoriaMetrics/fastcache v1.12.2 // indirect
 	github.com/andybalholm/brotli v1.2.0 // indirect
 	github.com/bits-and-blooms/bitset v1.22.0 // indirect
-	github.com/btcsuite/btcd/btcec/v2 v2.3.4 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/consensys/gnark-crypto v0.18.0 // indirect
 	github.com/crate-crypto/go-eth-kzg v1.4.0 // indirect
@@ -70,7 +68,6 @@ require (
 	github.com/tklauser/numcpus v0.6.1 // indirect
 	golang.org/x/crypto v0.44.0 // indirect
 	golang.org/x/net v0.47.0 // indirect
-	golang.org/x/oauth2 v0.21.0 // indirect
 	golang.org/x/sync v0.18.0 // indirect
 	golang.org/x/sys v0.38.0 // indirect
 	golang.org/x/text v0.31.0 // indirect

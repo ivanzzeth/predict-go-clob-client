@@ -88,6 +88,7 @@ type PlaceOrderInput struct {
 type PlaceOrderResult struct {
 	OrderID   string `json:"orderId"`
 	OrderHash string `json:"orderHash"`
+	Hash      string `json:"hash"` // Alternative field name for orderHash
 	Success   bool   `json:"success"`
 }
 
