@@ -14,8 +14,9 @@ import (
 )
 
 // GetAuthMessage gets the message to sign from Predict.fun API
+// Requires API key
 func (c *Client) GetAuthMessage() (*types.AuthMessageResponse, error) {
-	respBody, err := c.doRequest("GET", constants.EndpointAuthMessage, nil)
+	respBody, err := c.doRequest("GET", constants.EndpointAuthMessage, nil, true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get auth message: %w", err)
 	}
@@ -99,7 +100,7 @@ func (c *Client) GetJWTTokenFromSignature(signerAddress string, message string, 
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	respBody, err := c.doRequest("POST", constants.EndpointAuth, bodyBytes)
+	respBody, err := c.doRequest("POST", constants.EndpointAuth, bodyBytes, true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get JWT token: %w", err)
 	}

@@ -36,4 +36,5 @@ const (
 	// Order endpoints
 	EndpointOrders       = "/v1/orders"
 	EndpointOrdersRemove = "/v1/orders/remove"
+	EndpointOrdersMatches = "/v1/orders/matches"
 )

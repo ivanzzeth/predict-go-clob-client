@@ -12,17 +12,17 @@ import (
 // GetCategories gets all categories with optional status filter
 func (c *Client) GetCategories(opts *types.GetCategoriesOptions) ([]types.Category, error) {
 	path := constants.EndpointCategories
-	
+
 	params := url.Values{}
 	if opts != nil && opts.Status != "" {
 		params.Set("status", opts.Status.String())
 	}
-	
+
 	if len(params) > 0 {
 		path += "?" + params.Encode()
 	}
 
-	respBody, err := c.doRequest("GET", path, nil)
+	respBody, err := c.doRequest("GET", path, nil, true)
 	if err != nil {
 		return nil, err
 	}
@@ -54,7 +54,7 @@ func (c *Client) GetCategories(opts *types.GetCategoriesOptions) ([]types.Catego
 func (c *Client) GetCategory(slug string) (*types.Category, error) {
 	path := fmt.Sprintf(constants.EndpointCategoryBySlug, url.QueryEscape(slug))
 
-	respBody, err := c.doRequest("GET", path, nil)
+	respBody, err := c.doRequest("GET", path, nil, true)
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +111,7 @@ func (c *Client) GetMarkets(opts *types.GetMarketsOptions) ([]types.Market, erro
 		path += "?" + params.Encode()
 	}
 
-	respBody, err := c.doRequest("GET", path, nil)
+	respBody, err := c.doRequest("GET", path, nil, true)
 	if err != nil {
 		return nil, err
 	}
@@ -132,7 +132,7 @@ func (c *Client) GetMarkets(opts *types.GetMarketsOptions) ([]types.Market, erro
 	}
 
 	var markets []types.Market
-	
+
 	// Try to parse as array first
 	if err := json.Unmarshal(dataBytes, &markets); err == nil {
 		// Filter by status if provided (for non-OPEN status)
@@ -180,7 +180,7 @@ func (c *Client) getMarketsFromOpenCategories(limit int) ([]types.Market, error)
 	// Extract all markets from OPEN categories
 	allMarkets := make([]types.Market, 0)
 	seenIDs := make(map[string]bool)
-	
+
 	for _, category := range categories {
 		for _, market := range category.Markets {
 			if market.ID != "" && !seenIDs[string(market.ID)] {
@@ -202,7 +202,7 @@ func (c *Client) getMarketsFromOpenCategories(limit int) ([]types.Market, error)
 func (c *Client) GetMarket(marketID types.MarketID) (*types.Market, error) {
 	path := fmt.Sprintf(constants.EndpointMarketByID, url.QueryEscape(marketID.String()))
 
-	respBody, err := c.doRequest("GET", path, nil)
+	respBody, err := c.doRequest("GET", path, nil, true)
 	if err != nil {
 		return nil, err
 	}
@@ -234,7 +234,7 @@ func (c *Client) GetMarket(marketID types.MarketID) (*types.Market, error) {
 func (c *Client) GetMarketStats(marketID types.MarketID) (*types.MarketStats, error) {
 	path := fmt.Sprintf(constants.EndpointMarketStats, url.QueryEscape(marketID.String()))
 
-	respBody, err := c.doRequest("GET", path, nil)
+	respBody, err := c.doRequest("GET", path, nil, true)
 	if err != nil {
 		return nil, err
 	}
@@ -266,7 +266,7 @@ func (c *Client) GetMarketStats(marketID types.MarketID) (*types.MarketStats, er
 func (c *Client) GetMarketOrderbook(marketID types.MarketID) (*types.Orderbook, error) {
 	path := fmt.Sprintf(constants.EndpointMarketOrderbook, url.QueryEscape(marketID.String()))
 
-	respBody, err := c.doRequest("GET", path, nil)
+	respBody, err := c.doRequest("GET", path, nil, true)
 	if err != nil {
 		return nil, err
 	}
@@ -298,7 +298,7 @@ func (c *Client) GetMarketOrderbook(marketID types.MarketID) (*types.Orderbook, 
 func (c *Client) GetMarketLastSale(marketID types.MarketID) (*types.Sale, error) {
 	path := fmt.Sprintf(constants.EndpointMarketSale, url.QueryEscape(marketID.String()))
 
-	respBody, err := c.doRequest("GET", path, nil)
+	respBody, err := c.doRequest("GET", path, nil, true)
 	if err != nil {
 		return nil, err
 	}

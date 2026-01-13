@@ -22,10 +22,15 @@ func (s CategoryStatus) IsValid() bool {
 type MarketStatus string
 
 const (
-	MarketStatusRegistered MarketStatus = "REGISTERED"
-	MarketStatusOpen       MarketStatus = "OPEN"
-	MarketStatusResolved   MarketStatus = "RESOLVED"
-	MarketStatusCancelled  MarketStatus = "CANCELLED"
+	MarketStatusRegistered    MarketStatus = "REGISTERED"
+	MarketStatusPriceProposed MarketStatus = "PRICE_PROPOSED"
+	MarketStatusPriceDisputed MarketStatus = "PRICE_DISPUTED"
+	MarketStatusPaused        MarketStatus = "PAUSED"
+	MarketStatusUnpaused      MarketStatus = "UNPAUSED"
+	MarketStatusResolved      MarketStatus = "RESOLVED"
+	// Legacy status values (kept for backward compatibility)
+	MarketStatusOpen      MarketStatus = "OPEN"
+	MarketStatusCancelled MarketStatus = "CANCELLED"
 )
 
 // String returns the string representation of the status
@@ -35,16 +40,18 @@ func (s MarketStatus) String() string {
 
 // IsValid checks if the status is valid
 func (s MarketStatus) IsValid() bool {
-	return s == MarketStatusRegistered || s == MarketStatusOpen || 
-		   s == MarketStatusResolved || s == MarketStatusCancelled
+	return s == MarketStatusRegistered || s == MarketStatusPriceProposed ||
+		s == MarketStatusPriceDisputed || s == MarketStatusPaused ||
+		s == MarketStatusUnpaused || s == MarketStatusResolved ||
+		s == MarketStatusOpen || s == MarketStatusCancelled
 }
 
 // ReferralStatus represents the status of a referral
 type ReferralStatus string
 
 const (
-	ReferralStatusActive   ReferralStatus = "ACTIVE"
-	ReferralStatusInactive ReferralStatus = "INACTIVE"
+	ReferralStatusLocked   ReferralStatus = "LOCKED"
+	ReferralStatusUnlocked ReferralStatus = "UNLOCKED"
 )
 
 // String returns the string representation of the status
@@ -54,5 +61,28 @@ func (s ReferralStatus) String() string {
 
 // IsValid checks if the status is valid
 func (s ReferralStatus) IsValid() bool {
-	return s == ReferralStatusActive || s == ReferralStatusInactive
+	return s == ReferralStatusLocked || s == ReferralStatusUnlocked
+}
+
+// OrderStatus represents the status of an order
+type OrderStatus string
+
+const (
+	OrderStatusOpen        OrderStatus = "OPEN"
+	OrderStatusFilled      OrderStatus = "FILLED"
+	OrderStatusExpired     OrderStatus = "EXPIRED"
+	OrderStatusCancelled   OrderStatus = "CANCELLED"
+	OrderStatusInvalidated OrderStatus = "INVALIDATED"
+)
+
+// String returns the string representation of the status
+func (s OrderStatus) String() string {
+	return string(s)
+}
+
+// IsValid checks if the status is valid
+func (s OrderStatus) IsValid() bool {
+	return s == OrderStatusOpen || s == OrderStatusFilled ||
+		s == OrderStatusExpired || s == OrderStatusCancelled ||
+		s == OrderStatusInvalidated
 }

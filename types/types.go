@@ -6,6 +6,8 @@ import (
 	"sort"
 	"strconv"
 	"time"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 // APIBaseResponse represents the base response structure from Predict API
@@ -17,14 +19,14 @@ type APIBaseResponse struct {
 
 // Category represents a market category
 type Category struct {
-	ID            CategoryID   `json:"id"`
-	Slug          string       `json:"slug"`
-	Title         string       `json:"title"`
-	Description   string       `json:"description"`
-	Status        CategoryStatus `json:"status"`
-	IsNegRisk     bool         `json:"isNegRisk"`
-	IsYieldBearing bool        `json:"isYieldBearing"`
-	Markets       []Market     `json:"markets,omitempty"`
+	ID             CategoryID     `json:"id"`
+	Slug           string         `json:"slug"`
+	Title          string         `json:"title"`
+	Description    string         `json:"description"`
+	Status         CategoryStatus `json:"status"`
+	IsNegRisk      bool           `json:"isNegRisk"`
+	IsYieldBearing bool           `json:"isYieldBearing"`
+	Markets        []Market       `json:"markets,omitempty"`
 }
 
 // UnmarshalJSON implements custom unmarshaling for Category to handle ID as number or string
@@ -85,11 +87,11 @@ type Market struct {
 func (m *Market) UnmarshalJSON(data []byte) error {
 	type Alias Market
 	aux := &struct {
-		ID         interface{} `json:"id"`
-		Status     interface{} `json:"status"`
-		TokenID    interface{} `json:"tokenId,omitempty"`
+		ID             interface{} `json:"id"`
+		Status         interface{} `json:"status"`
+		TokenID        interface{} `json:"tokenId,omitempty"`
 		OutcomeTokenID interface{} `json:"outcomeTokenId,omitempty"`
-		FeeRateBps interface{} `json:"feeRateBps"`
+		FeeRateBps     interface{} `json:"feeRateBps"`
 		*Alias
 	}{
 		Alias: (*Alias)(m),
@@ -159,12 +161,12 @@ type Outcome struct {
 
 // MarketStats represents market statistics
 type MarketStats struct {
-	Volume      string `json:"volume"`
+	Volume       string `json:"volume"`
 	OpenInterest string `json:"openInterest"`
-	BidPrice    string `json:"bidPrice"`
-	AskPrice    string `json:"askPrice"`
-	LastPrice   string `json:"lastPrice"`
-	TraderCount int    `json:"traderCount,omitempty"`
+	BidPrice     string `json:"bidPrice"`
+	AskPrice     string `json:"askPrice"`
+	LastPrice    string `json:"lastPrice"`
+	TraderCount  int    `json:"traderCount,omitempty"`
 }
 
 // OrderbookLevel represents a single level in the orderbook
@@ -292,12 +294,58 @@ func (o *Orderbook) UnmarshalJSON(data []byte) error {
 
 // Sale represents a trade/sale
 type Sale struct {
-	TransactionHash TransactionHash `json:"transactionHash"`
-	Price           string          `json:"price"`
-	Amount          string          `json:"amount"`
-	Seller          Address         `json:"seller"`
-	Buyer           Address         `json:"buyer"`
-	Timestamp       time.Time       `json:"timestamp"`
+	TransactionHash common.Hash    `json:"transactionHash"`
+	Price           string         `json:"price"`
+	Amount          string         `json:"amount"`
+	Seller          common.Address `json:"seller"`
+	Buyer           common.Address `json:"buyer"`
+	Timestamp       time.Time      `json:"timestamp"`
+}
+
+// UnmarshalJSON implements custom unmarshaling for Sale to handle Address and TransactionHash conversion
+func (s *Sale) UnmarshalJSON(data []byte) error {
+	type Alias Sale
+	aux := &struct {
+		TransactionHash interface{} `json:"transactionHash"`
+		Seller          interface{} `json:"seller"`
+		Buyer           interface{} `json:"buyer"`
+		*Alias
+	}{
+		Alias: (*Alias)(s),
+	}
+
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	// Handle TransactionHash: convert string to common.Hash
+	if aux.TransactionHash != nil {
+		if hashStr, ok := aux.TransactionHash.(string); ok && hashStr != "" {
+			s.TransactionHash = common.HexToHash(hashStr)
+		} else {
+			return fmt.Errorf("invalid transactionHash type: %T", aux.TransactionHash)
+		}
+	}
+
+	// Handle Seller: convert string to common.Address
+	if aux.Seller != nil {
+		if sellerStr, ok := aux.Seller.(string); ok {
+			s.Seller = common.HexToAddress(sellerStr)
+		} else {
+			return fmt.Errorf("invalid seller address type: %T", aux.Seller)
+		}
+	}
+
+	// Handle Buyer: convert string to common.Address
+	if aux.Buyer != nil {
+		if buyerStr, ok := aux.Buyer.(string); ok {
+			s.Buyer = common.HexToAddress(buyerStr)
+		} else {
+			return fmt.Errorf("invalid buyer address type: %T", aux.Buyer)
+		}
+	}
+
+	return nil
 }
 
 // GetCategoriesOptions represents options for getting categories

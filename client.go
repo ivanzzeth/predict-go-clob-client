@@ -2,6 +2,7 @@ package predictclob
 
 import (
 	"fmt"
+	"log"
 	"math/big"
 	"net/http"
 	"strings"
@@ -281,8 +282,14 @@ func (c *Client) GetEthClient() *ethclient.Client {
 	return c.ethClient
 }
 
-// doRequest sends an HTTP request without authentication
-func (c *Client) doRequest(method, path string, body []byte) ([]byte, error) {
+// doRequest sends an HTTP request
+// requireAPIKey: if true, validates that API key is set before making the request
+func (c *Client) doRequest(method, path string, body []byte, requireAPIKey bool) ([]byte, error) {
+	// Validate API key if required
+	if requireAPIKey && c.apiKey == "" {
+		return nil, fmt.Errorf("API key is required for this endpoint. Use WithAPIKey option when creating client or SetAPIKey method")
+	}
+
 	url := c.host + path
 
 	headers := make(map[string]string)
@@ -302,13 +309,17 @@ func (c *Client) doRequest(method, path string, body []byte) ([]byte, error) {
 		return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, resp.String())
 	}
 
-	return resp.Bytes(), nil
+	// Print raw response for debugging during development
+	respBytes := resp.Bytes()
+	log.Printf("[DEBUG] %s %s - Response (status %d): %s", method, path, resp.StatusCode, string(respBytes))
+
+	return respBytes, nil
 }
 
 // GetOk checks if the API is healthy
 // Note: This endpoint may not exist on all API versions
 func (c *Client) GetOk() (bool, error) {
 	// Try to check API health by calling a simple endpoint
-	_, err := c.doRequest("GET", constants.EndpointCategories, nil)
+	_, err := c.doRequest("GET", constants.EndpointCategories, nil, true)
 	return err == nil, err
 }

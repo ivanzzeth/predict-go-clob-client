@@ -16,7 +16,7 @@ func (c *Client) GetAccount() (*types.Account, error) {
 		return nil, fmt.Errorf("JWT token is required for account operations")
 	}
 
-	respBody, err := c.doRequest("GET", constants.EndpointAccount, nil)
+	respBody, err := c.doRequest("GET", constants.EndpointAccount, nil, true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get account: %w", err)
 	}
@@ -70,7 +70,7 @@ func (c *Client) GetPositions(opts *types.GetPositionsOptions) ([]types.Position
 		path += "?" + params.Encode()
 	}
 
-	respBody, err := c.doRequest("GET", path, nil)
+	respBody, err := c.doRequest("GET", path, nil, true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get positions: %w", err)
 	}
@@ -96,4 +96,44 @@ func (c *Client) GetPositions(opts *types.GetPositionsOptions) ([]types.Position
 	}
 
 	return positions, nil
+}
+
+// GetActivity gets account activity including orders, matches, conversions, merges, and splits
+// Requires JWT token authentication
+func (c *Client) GetActivity(opts *types.GetActivityOptions) (*types.ActivityResponse, error) {
+	if c.jwtToken == "" {
+		return nil, fmt.Errorf("JWT token is required for getting activity")
+	}
+
+	path := constants.EndpointAccountActivity
+	params := url.Values{}
+
+	if opts != nil {
+		if opts.First != nil {
+			params.Set("first", fmt.Sprintf("%d", *opts.First))
+		}
+		if opts.After != "" {
+			params.Set("after", opts.After)
+		}
+	}
+
+	if len(params) > 0 {
+		path += "?" + params.Encode()
+	}
+
+	respBody, err := c.doRequest("GET", path, nil, true)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get activity: %w", err)
+	}
+
+	var response types.ActivityResponse
+	if err := json.Unmarshal(respBody, &response); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	if !response.Success {
+		return nil, fmt.Errorf("API returned success=false")
+	}
+
+	return &response, nil
 }

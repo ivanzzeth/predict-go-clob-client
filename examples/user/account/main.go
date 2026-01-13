@@ -5,9 +5,9 @@ import (
 	"log"
 	"os"
 
-	"github.com/joho/godotenv"
 	predictclob "github.com/ivanzzeth/predict-go-clob-client"
 	"github.com/ivanzzeth/predict-go-clob-client/constants"
+	"github.com/joho/godotenv"
 )
 
 func main() {
@@ -46,6 +46,25 @@ func main() {
 		log.Fatalf("Error getting account: %v", err)
 	}
 
-	// Print result using %+v to show all fields
-	fmt.Printf("Account:\n%+v\n", account)
+	// Print account information
+	fmt.Println("=== Account Information ===")
+	fmt.Printf("Name: %s\n", account.Name)
+	fmt.Printf("Address: %s\n", account.Address)
+	if account.ImageURL != nil {
+		fmt.Printf("Image URL: %s\n", *account.ImageURL)
+	} else {
+		fmt.Printf("Image URL: (null)\n")
+	}
+
+	if account.Referral != nil {
+		fmt.Println("\n=== Referral Information ===")
+		if account.Referral.Code != nil {
+			fmt.Printf("Code: %s\n", *account.Referral.Code)
+		} else {
+			fmt.Printf("Code: (null)\n")
+		}
+		fmt.Printf("Status: %s\n", account.Referral.Status)
+	} else {
+		fmt.Println("\nReferral: (not available)")
+	}
 }

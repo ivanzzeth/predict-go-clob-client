@@ -9,10 +9,12 @@ import (
 
 // Position represents a user position
 type Position struct {
-	ID       PositionID      `json:"id"`
-	Market   Market          `json:"market"`
-	Amount   decimal.Decimal `json:"-"` // Human readable decimal (converted from wei)
-	ValueUsd decimal.Decimal `json:"-"` // Human readable decimal
+	ID          PositionID      `json:"id"`
+	Market      Market          `json:"market"`
+	Amount      decimal.Decimal `json:"-"` // Human readable decimal (converted from wei)
+	ValueUsd    decimal.Decimal `json:"-"` // Human readable decimal
+	RawAmount   string          `json:"-"` // Raw wei amount as string
+	RawValueUsd string          `json:"-"` // Raw value USD as string
 }
 
 // UnmarshalJSON implements custom unmarshaling for Position to convert wei amounts to decimals
@@ -30,16 +32,18 @@ func (p *Position) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	// Convert Amount from wei to decimal
+	// Save raw values and convert Amount from wei to decimal
 	if aux.Amount != "" {
+		p.RawAmount = aux.Amount
 		amountWei, err := decimal.NewFromString(aux.Amount)
 		if err == nil {
 			p.Amount = amountWei.Shift(-constants.TokenDecimals)
 		}
 	}
 
-	// Convert ValueUsd (already in decimal format, no conversion needed)
+	// Save raw values and convert ValueUsd (already in decimal format, no conversion needed)
 	if aux.ValueUsd != "" {
+		p.RawValueUsd = aux.ValueUsd
 		valueUsd, err := decimal.NewFromString(aux.ValueUsd)
 		if err == nil {
 			p.ValueUsd = valueUsd

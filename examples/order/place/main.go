@@ -56,11 +56,11 @@ func main() {
 
 	// Get order side (default to BUY)
 	sideStr := os.Getenv("SIDE")
-	var side predictclob.OrderSide
+	var side types.OrderSide
 	if sideStr == "SELL" {
-		side = predictclob.OrderSideSell
+		side = types.OrderSideSell
 	} else {
-		side = predictclob.OrderSideBuy
+		side = types.OrderSideBuy
 	}
 
 	// Parse private key
@@ -104,11 +104,11 @@ func main() {
 	fmt.Printf("Amount: %s shares\n", amount.String())
 	fmt.Printf("Price: %s\n", price.String())
 
-	result, err := client.PlaceOrder(&predictclob.PlaceOrderInput{
+	result, err := client.PlaceOrder(&types.PlaceOrderInput{
 		MarketID: types.MarketID(marketID),
 		TokenID:  types.TokenID(tokenID),
 		Side:     side,
-		Strategy: predictclob.OrderStrategyLimit,
+		Strategy: types.OrderStrategyLimit,
 		Amount:   amount,
 		Price:    price,
 	})
