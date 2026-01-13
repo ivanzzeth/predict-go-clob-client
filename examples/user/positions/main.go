@@ -87,9 +87,21 @@ func main() {
 		log.Fatalf("Error getting positions: %v", err)
 	}
 
-	// Print result using %+v to show all fields
+	// Print result
 	fmt.Printf("Total positions: %d\n\n", len(positions))
 	for i, position := range positions {
-		fmt.Printf("Position [%d]:\n%+v\n\n", i+1, position)
+		fmt.Printf("=== Position %d ===\n", i+1)
+		fmt.Printf("ID: %s\n", position.ID.String())
+		fmt.Printf("Market ID: %s\n", position.Market.ID.String())
+		fmt.Printf("Market Title: %s\n", position.Market.Title)
+		fmt.Printf("Outcome: %s (IndexSet: %d, OnChainID: %s)\n", position.Outcome.Name, position.Outcome.IndexSet, string(position.Outcome.OnChainID))
+		if position.Outcome.Status != nil {
+			fmt.Printf("Outcome Status: %s\n", *position.Outcome.Status)
+		}
+		fmt.Printf("Total: %s (raw: %s)\n", position.Total.String(), position.RawAmount)
+		fmt.Printf("Locked: %s\n", position.Locked.String())
+		fmt.Printf("Available: %s\n", position.Available.String())
+		fmt.Printf("Value USD: %s (raw: %s)\n", position.ValueUsd.String(), position.RawValueUsd)
+		fmt.Println()
 	}
 }

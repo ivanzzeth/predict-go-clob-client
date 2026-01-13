@@ -273,21 +273,12 @@ func (c *Client) CancelOrders(input *types.CancelOrderInput) (*types.CancelOrder
 		return nil, fmt.Errorf("failed to cancel orders: %w", err)
 	}
 
-	var response struct {
-		Success bool     `json:"success"`
-		Removed []string `json:"removed"`
-		Noop    []string `json:"noop"`
-		Message string   `json:"message"`
-	}
+	var response types.CancelOrderResult
 	if err := json.Unmarshal(respBody, &response); err != nil {
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
 
-	return &types.CancelOrderResult{
-		Removed: response.Removed,
-		Noop:    response.Noop,
-		Success: response.Success,
-	}, nil
+	return &response, nil
 }
 
 // GetOrders retrieves orders for the authenticated user

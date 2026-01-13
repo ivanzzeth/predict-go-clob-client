@@ -137,9 +137,9 @@ type CancelOrderInput struct {
 
 // CancelOrderResult represents the result of canceling orders
 type CancelOrderResult struct {
-	Removed []string `json:"removed"`
-	Noop    []string `json:"noop"`
-	Success bool     `json:"success"`
+	Removed []string `json:"removed"` // Order IDs that were successfully removed/cancelled
+	Noop    []string `json:"noop"`   // Order IDs that were not cancelled (already cancelled/filled/invalid)
+	Success bool     `json:"success"` // Whether the cancellation request was successful
 }
 
 // GetOrdersOptions represents options for getting orders

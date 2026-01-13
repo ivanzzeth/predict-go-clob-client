@@ -11,10 +11,14 @@ import (
 type Position struct {
 	ID          PositionID      `json:"id"`
 	Market      Market          `json:"market"`
-	Amount      decimal.Decimal `json:"-"`        // Human readable decimal (converted from wei)
+	Outcome     CategoryMarketOutcome `json:"outcome"` // Outcome for this position
+	Amount      decimal.Decimal `json:"-"`        // Human readable decimal (converted from wei) - Total amount
 	ValueUsd    decimal.Decimal `json:"-"`        // Human readable decimal
 	RawAmount   string          `json:"amount"`   // Raw wei amount as string
 	RawValueUsd string          `json:"valueUsd"` // Raw value USD as string
+	Total       decimal.Decimal `json:"-"`        // Calculated: total amount (same as Amount, for clarity)
+	Locked      decimal.Decimal `json:"-"`        // Calculated: locked amount from OPEN SELL orders
+	Available   decimal.Decimal `json:"-"`        // Calculated: available amount = Total - Locked
 }
 
 // UnmarshalJSON implements custom unmarshaling for Position to convert wei amounts to decimals
@@ -49,6 +53,11 @@ func (p *Position) UnmarshalJSON(data []byte) error {
 			p.ValueUsd = valueUsd
 		}
 	}
+
+	// Initialize calculated fields (will be set by GetPositions)
+	p.Total = p.Amount
+	p.Locked = decimal.Zero
+	p.Available = p.Amount
 
 	return nil
 }
