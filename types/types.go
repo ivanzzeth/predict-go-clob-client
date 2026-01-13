@@ -158,21 +158,20 @@ func (m *MarketStats) UnmarshalJSON(data []byte) error {
 }
 
 // OrderbookLevel represents a single level in the orderbook
+// API returns [price, amount] as array where price and amount are decimal values (e.g., [0.034, 841.7])
 type OrderbookLevel struct {
-	Price     decimal.Decimal `json:"-"`      // Human readable decimal (converted from wei)
-	Amount    decimal.Decimal `json:"-"`      // Human readable decimal (converted from wei)
-	RawPrice  string          `json:"price"`  // Raw wei price as string
-	RawAmount string          `json:"amount"` // Raw wei amount as string
+	Price  decimal.Decimal // Price per share
+	Amount decimal.Decimal // Volume/quantity available at this price level
 }
 
 // LastOrderSettled represents the last settled order information
 type LastOrderSettled struct {
-	ID       string        `json:"id"`       // Order ID
-	Price    string        `json:"price"`    // Price as string (already in decimal format, not wei)
-	Kind     OrderStrategy `json:"kind"`     // Order strategy (MARKET or LIMIT)
-	MarketID MarketID      `json:"marketId"` // Market identifier
-	Side     OrderSide     `json:"side"`     // Order side (Bid or Ask)
-	Outcome  MarketOutcome `json:"outcome"`  // Market outcome (Yes or No)
+	ID       string          `json:"id"`       // Order ID
+	Price    decimal.Decimal `json:"price"`    // Price per share (decimal.Decimal handles JSON unmarshaling)
+	Kind     OrderStrategy   `json:"kind"`     // Order strategy (MARKET or LIMIT)
+	MarketID MarketID        `json:"marketId"` // Market identifier
+	Side     OrderSide       `json:"side"`     // Order side (Bid or Ask)
+	Outcome  MarketOutcome   `json:"outcome"`  // Market outcome (Yes or No)
 }
 
 // Orderbook represents the orderbook for a market.
@@ -198,136 +197,46 @@ type Orderbook struct {
 	Spread            decimal.Decimal   `json:"-"`                          // Calculated: spread = BestAsk - BestBid (only valid when both exist)
 }
 
-// UnmarshalJSON implements custom unmarshaling for OrderbookLevel to convert wei to decimal
+// UnmarshalJSON implements custom unmarshaling for OrderbookLevel
+// API returns [price, amount] as array (e.g., [0.034, 841.7])
 func (ol *OrderbookLevel) UnmarshalJSON(data []byte) error {
-	// Handle array format: [price, amount]
-	var arr []interface{}
-	if err := json.Unmarshal(data, &arr); err == nil && len(arr) >= 2 {
-		// Extract price and amount as numbers (can be float64 or string)
-		var priceStr, amountStr string
-
-		switch v := arr[0].(type) {
-		case float64:
-			priceStr = fmt.Sprintf("%.0f", v)
-		case string:
-			priceStr = v
-		default:
-			priceStr = fmt.Sprintf("%v", v)
-		}
-
-		switch v := arr[1].(type) {
-		case float64:
-			amountStr = fmt.Sprintf("%.0f", v)
-		case string:
-			amountStr = v
-		default:
-			amountStr = fmt.Sprintf("%v", v)
-		}
-
-		ol.RawPrice = priceStr
-		ol.RawAmount = amountStr
-
-		// Convert price from wei to decimal
-		if priceStr != "" {
-			priceWei, err := decimal.NewFromString(priceStr)
-			if err == nil {
-				ol.Price = priceWei.Shift(-constants.TokenDecimals)
-			}
-		}
-
-		// Convert amount from wei to decimal
-		if amountStr != "" {
-			amountWei, err := decimal.NewFromString(amountStr)
-			if err == nil {
-				ol.Amount = amountWei.Shift(-constants.TokenDecimals)
-			}
-		}
-
-		return nil
-	}
-
-	// Handle object format: {"price": "...", "amount": "..."}
-	type Alias OrderbookLevel
-	aux := &struct {
-		Price  interface{} `json:"price"`
-		Amount interface{} `json:"amount"`
-		*Alias
-	}{
-		Alias: (*Alias)(ol),
-	}
-
-	if err := json.Unmarshal(data, &aux); err != nil {
+	var arr [2]decimal.Decimal
+	if err := json.Unmarshal(data, &arr); err != nil {
 		return err
 	}
-
-	// Extract price
-	var priceStr string
-	switch v := aux.Price.(type) {
-	case float64:
-		priceStr = fmt.Sprintf("%.0f", v)
-	case string:
-		priceStr = v
-	default:
-		priceStr = fmt.Sprintf("%v", v)
-	}
-
-	// Extract amount
-	var amountStr string
-	switch v := aux.Amount.(type) {
-	case float64:
-		amountStr = fmt.Sprintf("%.0f", v)
-	case string:
-		amountStr = v
-	default:
-		amountStr = fmt.Sprintf("%v", v)
-	}
-
-	ol.RawPrice = priceStr
-	ol.RawAmount = amountStr
-
-	// Convert price from wei to decimal
-	if priceStr != "" {
-		priceWei, err := decimal.NewFromString(priceStr)
-		if err == nil {
-			ol.Price = priceWei.Shift(-constants.TokenDecimals)
-		}
-	}
-
-	// Convert amount from wei to decimal
-	if amountStr != "" {
-		amountWei, err := decimal.NewFromString(amountStr)
-		if err == nil {
-			ol.Amount = amountWei.Shift(-constants.TokenDecimals)
-		}
-	}
-
+	ol.Price = arr[0]
+	ol.Amount = arr[1]
 	return nil
 }
 
-// UnmarshalJSON implements custom unmarshaling for Orderbook to handle array format
+// UnmarshalJSON implements custom unmarshaling for Orderbook
+// Uses json.RawMessage to avoid interface{} and ensure type safety
 func (o *Orderbook) UnmarshalJSON(data []byte) error {
-	aux := &struct {
-		MarketID          interface{}   `json:"marketId"`
-		UpdateTimestampMs interface{}   `json:"updateTimestampMs"`
-		LastOrderSettled  interface{}   `json:"lastOrderSettled,omitempty"`
-		Bids              []interface{} `json:"bids"`
-		Asks              []interface{} `json:"asks"`
-	}{}
+	type orderbookJSON struct {
+		MarketID          json.RawMessage   `json:"marketId"`
+		UpdateTimestampMs json.RawMessage   `json:"updateTimestampMs"`
+		LastOrderSettled  json.RawMessage   `json:"lastOrderSettled,omitempty"`
+		Bids              []json.RawMessage `json:"bids"`
+		Asks              []json.RawMessage `json:"asks"`
+	}
 
+	var aux orderbookJSON
 	if err := json.Unmarshal(data, &aux); err != nil {
 		return err
 	}
 
-	// Convert MarketID
-	if aux.MarketID != nil {
+	// Parse MarketID (can be int or string)
+	if len(aux.MarketID) > 0 {
 		var marketIDStr string
-		switch v := aux.MarketID.(type) {
-		case float64:
-			marketIDStr = fmt.Sprintf("%.0f", v)
-		case string:
-			marketIDStr = v
-		default:
-			marketIDStr = fmt.Sprintf("%v", v)
+		// Try as float64 first (JSON numbers are float64)
+		var marketIDFloat float64
+		if err := json.Unmarshal(aux.MarketID, &marketIDFloat); err == nil {
+			marketIDStr = fmt.Sprintf("%.0f", marketIDFloat)
+		} else {
+			// Try as string
+			if err := json.Unmarshal(aux.MarketID, &marketIDStr); err != nil {
+				return fmt.Errorf("failed to parse marketId: %w", err)
+			}
 		}
 		if marketIDStr != "" {
 			if id, err := NewMarketIDFromString(marketIDStr); err == nil {
@@ -336,51 +245,41 @@ func (o *Orderbook) UnmarshalJSON(data []byte) error {
 		}
 	}
 
-	// Convert UpdateTimestampMs
-	if aux.UpdateTimestampMs != nil {
-		switch v := aux.UpdateTimestampMs.(type) {
-		case float64:
-			o.UpdateTimestampMs = int64(v)
-		case int64:
-			o.UpdateTimestampMs = v
-		case int:
-			o.UpdateTimestampMs = int64(v)
-		}
-	}
-
-	// Convert LastOrderSettled
-	if aux.LastOrderSettled != nil {
-		lastOrderData, err := json.Marshal(aux.LastOrderSettled)
-		if err == nil {
-			var lastOrder LastOrderSettled
-			if err := json.Unmarshal(lastOrderData, &lastOrder); err == nil {
-				o.LastOrderSettled = &lastOrder
+	// Parse UpdateTimestampMs (can be int64 or float64)
+	if len(aux.UpdateTimestampMs) > 0 {
+		var tsFloat float64
+		if err := json.Unmarshal(aux.UpdateTimestampMs, &tsFloat); err == nil {
+			o.UpdateTimestampMs = int64(tsFloat)
+		} else {
+			var tsInt int64
+			if err := json.Unmarshal(aux.UpdateTimestampMs, &tsInt); err == nil {
+				o.UpdateTimestampMs = tsInt
 			}
 		}
 	}
 
-	// Convert bids
+	// Parse LastOrderSettled (optional)
+	if len(aux.LastOrderSettled) > 0 {
+		var lastOrder LastOrderSettled
+		if err := json.Unmarshal(aux.LastOrderSettled, &lastOrder); err == nil {
+			o.LastOrderSettled = &lastOrder
+		}
+	}
+
+	// Parse bids
 	o.Bids = make([]OrderbookLevel, 0, len(aux.Bids))
 	for _, item := range aux.Bids {
-		itemData, err := json.Marshal(item)
-		if err != nil {
-			continue
-		}
 		var level OrderbookLevel
-		if err := json.Unmarshal(itemData, &level); err == nil {
+		if err := json.Unmarshal(item, &level); err == nil {
 			o.Bids = append(o.Bids, level)
 		}
 	}
 
-	// Convert asks
+	// Parse asks
 	o.Asks = make([]OrderbookLevel, 0, len(aux.Asks))
 	for _, item := range aux.Asks {
-		itemData, err := json.Marshal(item)
-		if err != nil {
-			continue
-		}
 		var level OrderbookLevel
-		if err := json.Unmarshal(itemData, &level); err == nil {
+		if err := json.Unmarshal(item, &level); err == nil {
 			o.Asks = append(o.Asks, level)
 		}
 	}

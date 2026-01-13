@@ -76,8 +76,8 @@ func printOrderbook(orderbook *types.Orderbook) {
 	} else {
 		for i, bid := range orderbook.Bids {
 			fmt.Printf("  Bid %d:\n", i+1)
-			fmt.Printf("    Price: %s (raw: %s)\n", bid.Price.String(), bid.RawPrice)
-			fmt.Printf("    Amount: %s (raw: %s)\n", bid.Amount.String(), bid.RawAmount)
+			fmt.Printf("    Price: %s\n", bid.Price.String())
+			fmt.Printf("    Amount: %s\n", bid.Amount.String())
 		}
 	}
 
@@ -88,8 +88,8 @@ func printOrderbook(orderbook *types.Orderbook) {
 	} else {
 		for i, ask := range orderbook.Asks {
 			fmt.Printf("  Ask %d:\n", i+1)
-			fmt.Printf("    Price: %s (raw: %s)\n", ask.Price.String(), ask.RawPrice)
-			fmt.Printf("    Amount: %s (raw: %s)\n", ask.Amount.String(), ask.RawAmount)
+			fmt.Printf("    Price: %s\n", ask.Price.String())
+			fmt.Printf("    Amount: %s\n", ask.Amount.String())
 		}
 	}
 
