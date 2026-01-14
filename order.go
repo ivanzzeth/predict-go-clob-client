@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"os"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -26,8 +27,7 @@ func (c *Client) PlaceOrder(input *types.PlaceOrderInput) (*types.PlaceOrderResu
 	}
 
 	// Get market info to get feeRateBps and other parameters
-	// useCache=false for order placement as we need real-time market data
-	market, err := c.GetMarket(input.MarketID, false)
+	market, err := c.GetMarket(input.MarketID, true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get market: %w", err)
 	}
@@ -38,7 +38,9 @@ func (c *Client) PlaceOrder(input *types.PlaceOrderInput) (*types.PlaceOrderResu
 	}
 
 	// Get token ID from input or market outcomes
+	// Also determine if this is outcome 0 (IndexSet=1) or outcome 1 (IndexSet=2)
 	tokenID := string(input.TokenID)
+	isOutcome1 := false // Track if we're trading outcome 1 (IndexSet=2)
 	if tokenID == "" {
 		// Use outcome based on side
 		if len(market.Outcomes) == 0 {
@@ -51,23 +53,43 @@ func (c *Client) PlaceOrder(input *types.PlaceOrderInput) (*types.PlaceOrderResu
 			for _, outcome := range market.Outcomes {
 				if outcome.IndexSet == 1 {
 					tokenID = string(outcome.OnChainID)
+					isOutcome1 = false // IndexSet=1 is outcome 0
 					break
 				}
 			}
 			if tokenID == "" {
 				tokenID = string(market.Outcomes[0].OnChainID)
+				// Check if first outcome is IndexSet=2 (outcome 1)
+				if market.Outcomes[0].IndexSet == 2 {
+					isOutcome1 = true
+				}
 			}
 		} else {
 			for _, outcome := range market.Outcomes {
 				if outcome.IndexSet == 2 {
 					tokenID = string(outcome.OnChainID)
+					isOutcome1 = true // IndexSet=2 is outcome 1
 					break
 				}
 			}
 			if tokenID == "" && len(market.Outcomes) > 1 {
 				tokenID = string(market.Outcomes[1].OnChainID)
+				if market.Outcomes[1].IndexSet == 2 {
+					isOutcome1 = true
+				}
 			} else if tokenID == "" {
 				tokenID = string(market.Outcomes[0].OnChainID)
+				if market.Outcomes[0].IndexSet == 2 {
+					isOutcome1 = true
+				}
+			}
+		}
+	} else {
+		// TokenID is provided, need to find which outcome it corresponds to
+		for _, outcome := range market.Outcomes {
+			if string(outcome.OnChainID) == tokenID {
+				isOutcome1 = (outcome.IndexSet == 2) // IndexSet=2 means outcome 1
+				break
 			}
 		}
 	}
@@ -89,11 +111,87 @@ func (c *Client) PlaceOrder(input *types.PlaceOrderInput) (*types.PlaceOrderResu
 	var makerAmount, takerAmount decimal.Decimal
 	pricePerShare := input.Price
 
+	// If price is zero (or MARKET order), get price from orderbook
+	if pricePerShare.IsZero() || input.Strategy == types.OrderStrategyMarket {
+		// Query orderbook to get best price
+		orderbook, err := c.GetMarketOrderbook(input.MarketID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get orderbook for market order: %w", err)
+		}
+
+		// For binary markets, orderbook returns prices for outcome 0
+		// If we're trading outcome 1, we need to convert prices: price_1 = 1 - price_0
+		// Also swap bids and asks: bid_1 = 1 - ask_0, ask_1 = 1 - bid_0
+		var bestBid, bestAsk decimal.Decimal
+		if isOutcome1 {
+			// Outcome 1: convert complementary prices and swap bids/asks
+			if len(orderbook.Bids) == 0 || len(orderbook.Asks) == 0 {
+				return nil, fmt.Errorf("orderbook missing bids or asks for outcome 1 conversion")
+			}
+			// For outcome 1: bid = 1 - outcome 0's ask, ask = 1 - outcome 0's bid
+			one := decimal.NewFromInt(1)
+			bestBid = one.Sub(orderbook.BestAsk) // Outcome 1 bid = 1 - outcome 0 ask
+			bestAsk = one.Sub(orderbook.BestBid) // Outcome 1 ask = 1 - outcome 0 bid
+		} else {
+			// Outcome 0: use prices as-is
+			if len(orderbook.Bids) == 0 || len(orderbook.Asks) == 0 {
+				return nil, fmt.Errorf("orderbook missing bids or asks")
+			}
+			bestBid = orderbook.BestBid
+			bestAsk = orderbook.BestAsk
+		}
+
+		// Get best price based on side
+		// BUY: use bestAsk (lowest sell price)
+		// SELL: use bestBid (highest buy price)
+		if input.Side == types.OrderSideBuy {
+			pricePerShare = bestAsk
+		} else {
+			pricePerShare = bestBid
+		}
+	}
+
 	if input.Strategy == types.OrderStrategyMarket {
-		// For MARKET orders, use 0 price and get amounts from orderbook
-		pricePerShare = decimal.Zero
-		makerAmount = input.Amount.Shift(constants.TokenDecimals) // Convert to wei
-		takerAmount = decimal.Zero
+		// For MARKET orders, calculate amounts with slippage
+		// Get slippage multiplier (slippageBps is in basis points, e.g., 1000 = 10%)
+		slippageMultiplier := decimal.NewFromInt(1)
+		if input.SlippageBps > 0 {
+			// Convert basis points to decimal multiplier
+			// 1000 bps = 10% = 0.1, so multiplier = 1 + 0.1 = 1.1 for BUY (price goes up)
+			// For SELL: multiplier = 1 - 0.1 = 0.9 (price goes down)
+			slippageDecimal := decimal.NewFromInt(int64(input.SlippageBps)).Div(decimal.NewFromInt(10000))
+			if input.Side == types.OrderSideBuy {
+				slippageMultiplier = decimal.NewFromInt(1).Add(slippageDecimal) // BUY: price goes up
+			} else {
+				slippageMultiplier = decimal.NewFromInt(1).Sub(slippageDecimal) // SELL: price goes down
+			}
+		}
+
+		// Apply slippage to price
+		priceWithSlippage := pricePerShare.Mul(slippageMultiplier)
+		quantityWei := input.Amount.Shift(constants.TokenDecimals) // Convert to wei
+
+		// Debug logging for MARKET orders
+		fmt.Fprintf(os.Stderr, "[DEBUG] MARKET order calculation: Side=%v, pricePerShare=%s, slippageBps=%d, slippageMultiplier=%s, priceWithSlippage=%s, input.Amount=%s\n",
+			input.Side, pricePerShare.String(), input.SlippageBps, slippageMultiplier.String(), priceWithSlippage.String(), input.Amount.String())
+
+		if input.Side == types.OrderSideBuy {
+			// BUY: makerAmount is quoteToken (USDT), takerAmount is baseToken (shares)
+			// makerAmount = quantity * priceWithSlippage (USDT to pay)
+			// takerAmount = quantity (shares to receive)
+			makerAmount = input.Amount.Mul(priceWithSlippage).Shift(constants.TokenDecimals)
+			takerAmount = quantityWei
+		} else {
+			// SELL: makerAmount is baseToken (shares), takerAmount is quoteToken (USDT)
+			// makerAmount = quantity (shares to give)
+			// takerAmount = quantity * priceWithSlippage (USDT to receive)
+			makerAmount = quantityWei
+			takerAmount = input.Amount.Mul(priceWithSlippage).Shift(constants.TokenDecimals)
+			fmt.Fprintf(os.Stderr, "[DEBUG] MARKET SELL: makerAmount=%s, takerAmount=%s (input.Amount=%s * priceWithSlippage=%s)\n",
+				makerAmount.String(), takerAmount.String(), input.Amount.String(), priceWithSlippage.String())
+		}
+		// Update pricePerShare to include slippage for API
+		pricePerShare = priceWithSlippage
 	} else {
 		// For LIMIT orders, calculate based on side
 		// Amount is always in shares (quantity of outcome tokens)
@@ -147,6 +245,10 @@ func (c *Client) PlaceOrder(input *types.PlaceOrderInput) (*types.PlaceOrderResu
 		Nonce:         "0",
 		Expiration:    fmt.Sprintf("%d", expiration),
 	}
+
+	// Print full OrderData for debugging - use fmt.Fprintf to stderr to ensure immediate output
+	fmt.Fprintf(os.Stderr, "[DEBUG] OrderData: Maker=%s, Signer=%s, TokenId=%s, MakerAmount=%s, TakerAmount=%s, Side=%v, FeeRateBps=%s, Expiration=%s\n",
+		orderData.Maker, orderData.Signer, orderData.TokenId, orderData.MakerAmount, orderData.TakerAmount, orderData.Side, orderData.FeeRateBps, orderData.Expiration)
 
 	// Build and sign order
 	signedOrder, err := orderBuilder.BuildSignedOrder(c.signer, orderData, exchangeAddr)
