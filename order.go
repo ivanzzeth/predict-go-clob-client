@@ -227,10 +227,6 @@ func (c *Client) PlaceOrder(input *types.PlaceOrderInput) (*types.PlaceOrderResu
 
 	// Expiration: use input or default
 	expirationSeconds := input.ExpirationSeconds
-	if expirationSeconds <= 0 {
-		expirationSeconds = constants.DefaultOrderExpirationSeconds
-	}
-	expiration := time.Now().Unix() + expirationSeconds
 
 	orderData := &ordermodel.OrderData{
 		Maker:         signerAddr.Hex(),
@@ -243,7 +239,11 @@ func (c *Client) PlaceOrder(input *types.PlaceOrderInput) (*types.PlaceOrderResu
 		Side:          orderSide,
 		SignatureType: predictcontracts.SignatureTypeEOA,
 		Nonce:         "0",
-		Expiration:    fmt.Sprintf("%d", expiration),
+	}
+
+	if expirationSeconds > 0 {
+		expiration := time.Now().Unix() + expirationSeconds
+		orderData.Expiration = fmt.Sprintf("%d", expiration)
 	}
 
 	// Print full OrderData for debugging - use fmt.Fprintf to stderr to ensure immediate output

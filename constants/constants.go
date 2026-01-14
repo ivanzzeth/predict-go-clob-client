@@ -11,12 +11,6 @@ const (
 	TokenDecimals = 18
 )
 
-// Order defaults
-const (
-	// DefaultOrderExpirationSeconds is the default order expiration time in seconds (1 hour)
-	DefaultOrderExpirationSeconds = 3600
-)
-
 // API Endpoints
 const (
 	// Root endpoint
