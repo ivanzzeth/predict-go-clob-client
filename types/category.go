@@ -32,10 +32,11 @@ func (s CategorySort) IsValid() bool {
 type MarketVariant string
 
 const (
-	MarketVariantDefault      MarketVariant = "DEFAULT"
-	MarketVariantSportsMatch  MarketVariant = "SPORTS_MATCH"
-	MarketVariantCryptoUpDown MarketVariant = "CRYPTO_UP_DOWN"
-	MarketVariantTweetCount   MarketVariant = "TWEET_COUNT"
+	MarketVariantDefault         MarketVariant = "DEFAULT"
+	MarketVariantSportsMatch     MarketVariant = "SPORTS_MATCH"
+	MarketVariantCryptoUpDown    MarketVariant = "CRYPTO_UP_DOWN"
+	MarketVariantTweetCount      MarketVariant = "TWEET_COUNT"
+	MarketVariantSportsTeamMatch MarketVariant = "SPORTS_TEAM_MATCH"
 )
 
 // String returns the string representation
@@ -46,7 +47,8 @@ func (v MarketVariant) String() string {
 // IsValid checks if the variant is valid
 func (v MarketVariant) IsValid() bool {
 	return v == MarketVariantDefault || v == MarketVariantSportsMatch ||
-		v == MarketVariantCryptoUpDown || v == MarketVariantTweetCount
+		v == MarketVariantCryptoUpDown || v == MarketVariantTweetCount ||
+		v == MarketVariantSportsTeamMatch
 }
 
 // CategoryTag represents a tag associated with a category
