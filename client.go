@@ -59,6 +59,9 @@ type Client struct {
 	marketCache map[string]*cachedMarket // key: marketID string
 	cacheTTL    time.Duration            // Cache TTL, 0 means no caching
 	cacheMu     sync.RWMutex             // Mutex for cache access
+
+	// JWT token refresh
+	jwtMu sync.Mutex // Mutex to protect concurrent JWT refresh
 }
 
 // ClientConfig represents configuration for creating a client
@@ -342,9 +345,17 @@ func (c *Client) requireJWTToken() error {
 	return nil
 }
 
-// doRequest sends an HTTP request
-// requireAPIKey: if true, validates that API key is set before making the request
+// doRequest sends an HTTP request with automatic JWT refresh on 401 errors.
+// requireAPIKey: if true, validates that API key is set before making the request.
+// If the request fails with 401 "Invalid JWT" and a signer is available, it will
+// automatically re-authenticate and retry the request once.
 func (c *Client) doRequest(method, path string, body []byte, requireAPIKey bool) ([]byte, error) {
+	return c.doRequestWithRetry(method, path, body, requireAPIKey, true)
+}
+
+// doRequestWithRetry is the internal implementation of doRequest with retry control.
+// allowRetry: if true, allows one retry after JWT refresh on 401 error.
+func (c *Client) doRequestWithRetry(method, path string, body []byte, requireAPIKey bool, allowRetry bool) ([]byte, error) {
 	// Validate API key if required
 	if requireAPIKey {
 		if err := c.requireAPIKey(); err != nil {
@@ -367,6 +378,25 @@ func (c *Client) doRequest(method, path string, body []byte, requireAPIKey bool)
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
 
+	// Check for 401 error with "Invalid JWT" message
+	if resp.StatusCode == http.StatusUnauthorized {
+		respStr := resp.String()
+		if strings.Contains(respStr, "Invalid JWT") {
+			// Attempt to refresh JWT if signer is available and retry is allowed
+			if allowRetry && c.signer != nil {
+				log.Printf("[DEBUG] JWT token expired, attempting to refresh...")
+				if err := c.refreshJWTToken(); err != nil {
+					return nil, fmt.Errorf("JWT token expired and refresh failed: %w", err)
+				}
+				log.Printf("[DEBUG] JWT token refreshed successfully, retrying request...")
+				// Retry the request once with the new token (no further retries)
+				return c.doRequestWithRetry(method, path, body, requireAPIKey, false)
+			}
+			return nil, fmt.Errorf("%w: %s", errs.ErrJWTTokenExpired, respStr)
+		}
+		return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, respStr)
+	}
+
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, resp.String())
 	}
@@ -376,6 +406,24 @@ func (c *Client) doRequest(method, path string, body []byte, requireAPIKey bool)
 	log.Printf("[DEBUG] %s %s - Response (status %d): %s", method, path, resp.StatusCode, string(respBytes))
 
 	return respBytes, nil
+}
+
+// refreshJWTToken re-authenticates and updates the JWT token.
+// This method is thread-safe and ensures only one refresh happens at a time.
+func (c *Client) refreshJWTToken() error {
+	c.jwtMu.Lock()
+	defer c.jwtMu.Unlock()
+
+	if c.signer == nil {
+		return errs.ErrSignerRequiredForRefresh
+	}
+
+	_, _, err := c.Authenticate()
+	if err != nil {
+		return fmt.Errorf("%w: %v", errs.ErrJWTRefreshFailed, err)
+	}
+
+	return nil
 }
 
 // GetOk checks if the API is healthy

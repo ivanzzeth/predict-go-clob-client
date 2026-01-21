@@ -10,6 +10,15 @@ var (
 	// ErrJWTTokenRequired is returned when a JWT token is required but not set
 	ErrJWTTokenRequired = fmt.Errorf("JWT token is required for this operation. Use Authenticate method or SetJWTToken method")
 
+	// ErrJWTTokenExpired is returned when the JWT token has expired (401 Invalid JWT)
+	ErrJWTTokenExpired = fmt.Errorf("JWT token has expired")
+
+	// ErrJWTRefreshFailed is returned when auto-refresh of JWT token fails
+	ErrJWTRefreshFailed = fmt.Errorf("failed to refresh JWT token")
+
+	// ErrSignerRequiredForRefresh is returned when JWT refresh is needed but no signer is available
+	ErrSignerRequiredForRefresh = fmt.Errorf("signer is required for JWT token refresh")
+
 	// ErrInvalidAddress is returned when an address format is invalid
 	ErrInvalidAddress = fmt.Errorf("invalid address format")
 
