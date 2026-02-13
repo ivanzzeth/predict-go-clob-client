@@ -74,7 +74,7 @@ func main() {
 	// Print order details
 	fmt.Printf("\nOrder Details:\n")
 	fmt.Printf("  ID: %s\n", order.ID)
-	fmt.Printf("  Market ID: %s\n", order.MarketID)
+	fmt.Printf("  Market ID: %v\n", order.MarketID)
 	fmt.Printf("  Currency: %s\n", order.Currency)
 	fmt.Printf("  Strategy: %s\n", order.Strategy)
 	fmt.Printf("  Status: %s\n", order.Status)

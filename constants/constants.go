@@ -2,7 +2,13 @@ package constants
 
 // Default API host
 const (
-	DefaultAPIHost = "https://api.predict.fun"
+	DefaultAPIHost    = "https://api.predict.fun"
+	DefaultGraphQLHost = "https://graphql.predict.fun"
+)
+
+// GraphQL endpoints
+const (
+	EndpointGraphQL = "/graphql"
 )
 
 // Token decimals

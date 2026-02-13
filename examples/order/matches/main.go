@@ -82,7 +82,7 @@ func main() {
 	// Print match events
 	for i, match := range response.Data {
 		fmt.Printf("\n--- Match Event %d ---\n", i+1)
-		fmt.Printf("Market: %s (ID: %s)\n", match.Market.Title, match.Market.ID)
+		fmt.Printf("Market: %s (ID: %v)\n", match.Market.Title, match.Market.ID)
 		fmt.Printf("Transaction Hash: %s\n", match.TransactionHash.Hex())
 		fmt.Printf("Executed At: %s\n", match.ExecutedAt.Format("2006-01-02 15:04:05"))
 		fmt.Printf("Amount Filled: %s\n", match.AmountFilled.String())

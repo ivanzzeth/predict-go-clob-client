@@ -84,7 +84,7 @@ func main() {
 			fmt.Printf("Order: QuoteType=%s, Amount=%s, Price=%s\n",
 				activity.Order.QuoteType, activity.Order.Amount.String(), activity.Order.Price.String())
 		}
-		fmt.Printf("Market: %s (ID: %s)\n", activity.Market.Title, activity.Market.ID)
+		fmt.Printf("Market: %s (ID: %v)\n", activity.Market.Title, activity.Market.ID)
 		if activity.Outcome != nil {
 			fmt.Printf("Outcome: %s (IndexSet: %d)\n", activity.Outcome.Name, activity.Outcome.IndexSet)
 		}

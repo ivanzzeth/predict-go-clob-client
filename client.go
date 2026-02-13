@@ -39,10 +39,11 @@ type cachedMarket struct {
 
 // Client is the main client for interacting with Predict.fun API
 type Client struct {
-	host      string
-	apiKey    string
-	jwtToken  string
-	reqClient *req.Client
+	host        string
+	graphqlHost string
+	apiKey      string
+	jwtToken    string
+	reqClient   *req.Client
 
 	// Order signing
 	chainID *big.Int
@@ -66,12 +67,13 @@ type Client struct {
 
 // ClientConfig represents configuration for creating a client
 type ClientConfig struct {
-	APIHost    string
-	APIKey     string
-	JWTToken   string
-	UserAgent  string
-	Transport  *http.Transport
-	APITimeout time.Duration
+	APIHost     string
+	GraphQLHost string
+	APIKey      string
+	JWTToken    string
+	UserAgent   string
+	Transport   *http.Transport
+	APITimeout  time.Duration
 
 	// Order signing config
 	ChainID *big.Int
@@ -93,6 +95,13 @@ type ClientOption func(*ClientConfig)
 func WithAPIHost(host string) ClientOption {
 	return func(cfg *ClientConfig) {
 		cfg.APIHost = host
+	}
+}
+
+// WithGraphQLHost sets the GraphQL API host URL
+func WithGraphQLHost(host string) ClientOption {
+	return func(cfg *ClientConfig) {
+		cfg.GraphQLHost = host
 	}
 }
 
@@ -172,17 +181,19 @@ func WithCacheTTL(ttl time.Duration) ClientOption {
 // NewClient creates a new Predict API client instance
 func NewClient(options ...ClientOption) (*Client, error) {
 	defaultConfig := &ClientConfig{
-		APIHost:    constants.DefaultAPIHost,
-		APITimeout: 30 * time.Second,
-		ChainID:    big.NewInt(56), // Default to BNB Chain mainnet
+		APIHost:     constants.DefaultAPIHost,
+		GraphQLHost: constants.DefaultGraphQLHost,
+		APITimeout:  30 * time.Second,
+		ChainID:     big.NewInt(56), // Default to BNB Chain mainnet
 	}
 
 	for _, option := range options {
 		option(defaultConfig)
 	}
 
-	// Remove trailing slash from API host (same as Python POC)
+	// Remove trailing slash from hosts
 	apiHost := strings.TrimSuffix(defaultConfig.APIHost, "/")
+	graphqlHost := strings.TrimSuffix(defaultConfig.GraphQLHost, "/")
 
 	reqClient := CreateReqClientWithProxy(defaultConfig.Transport, defaultConfig.UserAgent, defaultConfig.APITimeout)
 
@@ -198,6 +209,7 @@ func NewClient(options ...ClientOption) (*Client, error) {
 
 	client := &Client{
 		host:             apiHost,
+		graphqlHost:      graphqlHost,
 		apiKey:           defaultConfig.APIKey,
 		jwtToken:         defaultConfig.JWTToken,
 		reqClient:        reqClient,
@@ -268,9 +280,10 @@ func NewReadOnlyClient(apiHost string, apiKey string) *Client {
 
 	reqClient := CreateReqClientWithProxy(nil, "", 30*time.Second)
 	return &Client{
-		host:      apiHost,
-		apiKey:    apiKey,
-		reqClient: reqClient,
+		host:        apiHost,
+		graphqlHost: constants.DefaultGraphQLHost,
+		apiKey:      apiKey,
+		reqClient:   reqClient,
 	}
 }
 
