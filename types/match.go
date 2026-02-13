@@ -193,14 +193,22 @@ func (m *MatchEvent) UnmarshalJSON(data []byte) error {
 }
 
 // GetOrderMatchesOptions represents options for getting order match events
+//
+// BUG(predict-api): The signerAddress filter only matches the taker side of a match.
+// Maker matches are NOT returned regardless of the isSignerMaker value.
+// When isSignerMaker=true is set, the API returns empty results even when the signer
+// has confirmed maker fills. The API docs claim isSignerMaker=undefined returns both,
+// but in practice signerAddress always filters by taker only.
+// Workaround: query by MarketID only (without SignerAddress) and filter locally.
+// TODO: Remove workaround once Predict fixes the signerAddress/isSignerMaker filter.
 type GetOrderMatchesOptions struct {
 	First           *int   // Pagination: number of results to return
 	After           string // Pagination: cursor for next page
 	CategoryID      CategoryID
 	MarketID        MarketID
 	MinValueUsdtWei string // Minimum value in USDT wei
-	SignerAddress   string // Filter by signer address
-	IsSignerMaker   *bool  // Filter by whether signer is maker (true) or taker (false), nil for both
+	SignerAddress   string // Filter by signer address (BUG: only matches takers, see above)
+	IsSignerMaker   *bool  // Filter by whether signer is maker (true) or taker (false), nil for both (BUG: does not work, see above)
 }
 
 // MatchEventResponse represents the response from GetOrderMatches API

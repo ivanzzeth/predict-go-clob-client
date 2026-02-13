@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
-	"os"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -171,10 +170,6 @@ func (c *Client) PlaceOrder(input *types.PlaceOrderInput) (*types.PlaceOrderResu
 		priceWithSlippage := pricePerShare.Mul(slippageMultiplier)
 		quantityWei := input.Amount.Shift(constants.TokenDecimals) // Convert to wei
 
-		// Debug logging for MARKET orders
-		fmt.Fprintf(os.Stderr, "[DEBUG] MARKET order calculation: Side=%v, pricePerShare=%s, slippageBps=%d, slippageMultiplier=%s, priceWithSlippage=%s, input.Amount=%s\n",
-			input.Side, pricePerShare.String(), input.SlippageBps, slippageMultiplier.String(), priceWithSlippage.String(), input.Amount.String())
-
 		if input.Side == types.OrderSideBuy {
 			// BUY: makerAmount is quoteToken (USDT), takerAmount is baseToken (shares)
 			// makerAmount = quantity * priceWithSlippage (USDT to pay)
@@ -187,8 +182,6 @@ func (c *Client) PlaceOrder(input *types.PlaceOrderInput) (*types.PlaceOrderResu
 			// takerAmount = quantity * priceWithSlippage (USDT to receive)
 			makerAmount = quantityWei
 			takerAmount = input.Amount.Mul(priceWithSlippage).Shift(constants.TokenDecimals)
-			fmt.Fprintf(os.Stderr, "[DEBUG] MARKET SELL: makerAmount=%s, takerAmount=%s (input.Amount=%s * priceWithSlippage=%s)\n",
-				makerAmount.String(), takerAmount.String(), input.Amount.String(), priceWithSlippage.String())
 		}
 		// Update pricePerShare to include slippage for API
 		pricePerShare = priceWithSlippage
@@ -246,10 +239,6 @@ func (c *Client) PlaceOrder(input *types.PlaceOrderInput) (*types.PlaceOrderResu
 		SignatureType: predictcontracts.SignatureTypeEOA,
 		Nonce:         "0",
 	}
-
-	// Print full OrderData for debugging - use fmt.Fprintf to stderr to ensure immediate output
-	fmt.Fprintf(os.Stderr, "[DEBUG] OrderData: Maker=%s, Signer=%s, TokenId=%s, MakerAmount=%s, TakerAmount=%s, Side=%v, FeeRateBps=%s, Expiration=%s\n",
-		orderData.Maker, orderData.Signer, orderData.TokenId, orderData.MakerAmount, orderData.TakerAmount, orderData.Side, orderData.FeeRateBps, orderData.Expiration)
 
 	// Build and sign order
 	signedOrder, err := orderBuilder.BuildSignedOrder(c.signer, orderData, exchangeAddr)
