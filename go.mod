@@ -10,7 +10,7 @@ require (
 	github.com/ivanzzeth/ethclient v0.1.35
 	github.com/ivanzzeth/ethsig v0.1.0
 	github.com/ivanzzeth/predict-go-contracts v0.0.4
-	github.com/ivanzzeth/predict-go-order-utils v0.0.1
+	github.com/ivanzzeth/predict-go-order-utils v0.0.4
 	github.com/joho/godotenv v1.5.1
 	github.com/shopspring/decimal v1.4.0
 )
