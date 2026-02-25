@@ -2,7 +2,6 @@ package predictclob
 
 import (
 	"fmt"
-	"log"
 	"math/big"
 	"net/http"
 	"strings"
@@ -397,11 +396,9 @@ func (c *Client) doRequestWithRetry(method, path string, body []byte, requireAPI
 		if strings.Contains(respStr, "Invalid JWT") {
 			// Attempt to refresh JWT if signer is available and retry is allowed
 			if allowRetry && c.signer != nil {
-				log.Printf("[DEBUG] JWT token expired, attempting to refresh...")
 				if err := c.refreshJWTToken(); err != nil {
 					return nil, fmt.Errorf("JWT token expired and refresh failed: %w", err)
 				}
-				log.Printf("[DEBUG] JWT token refreshed successfully, retrying request...")
 				// Retry the request once with the new token (no further retries)
 				return c.doRequestWithRetry(method, path, body, requireAPIKey, false)
 			}
@@ -414,11 +411,7 @@ func (c *Client) doRequestWithRetry(method, path string, body []byte, requireAPI
 		return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, resp.String())
 	}
 
-	// Print raw response for debugging during development
-	respBytes := resp.Bytes()
-	log.Printf("[DEBUG] %s %s - Response (status %d): %s", method, path, resp.StatusCode, string(respBytes))
-
-	return respBytes, nil
+	return resp.Bytes(), nil
 }
 
 // refreshJWTToken re-authenticates and updates the JWT token.
