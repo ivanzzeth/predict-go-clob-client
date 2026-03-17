@@ -365,6 +365,10 @@ func (c *Client) doRequest(method, path string, body []byte, requireAPIKey bool)
 	return c.doRequestWithRetry(method, path, body, requireAPIKey, true)
 }
 
+func isAuthEndpoint(path string) bool {
+	return path == constants.EndpointAuthMessage || path == constants.EndpointAuth
+}
+
 // doRequestWithRetry is the internal implementation of doRequest with retry control.
 // allowRetry: if true, allows one retry after JWT refresh on 401 error.
 func (c *Client) doRequestWithRetry(method, path string, body []byte, requireAPIKey bool, allowRetry bool) ([]byte, error) {
@@ -381,7 +385,8 @@ func (c *Client) doRequestWithRetry(method, path string, body []byte, requireAPI
 	if c.apiKey != "" {
 		headers["x-api-key"] = c.apiKey
 	}
-	if c.jwtToken != "" {
+	// Do not attach JWT to auth endpoints; it can be expired and is not required there.
+	if c.jwtToken != "" && !isAuthEndpoint(path) {
 		headers["Authorization"] = "Bearer " + c.jwtToken
 	}
 
@@ -390,18 +395,20 @@ func (c *Client) doRequestWithRetry(method, path string, body []byte, requireAPI
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
 
-	// Check for 401 error with "Invalid JWT" message
+	// Check for 401 errors and refresh JWT when possible.
 	if resp.StatusCode == http.StatusUnauthorized {
 		respStr := resp.String()
-		if strings.Contains(respStr, "Invalid JWT") {
-			// Attempt to refresh JWT if signer is available and retry is allowed
-			if allowRetry && c.signer != nil {
-				if err := c.refreshJWTToken(); err != nil {
-					return nil, fmt.Errorf("JWT token expired and refresh failed: %w", err)
-				}
-				// Retry the request once with the new token (no further retries)
-				return c.doRequestWithRetry(method, path, body, requireAPIKey, false)
+		// Only refresh for non-auth endpoints and only if we actually used JWT.
+		jwtUsed := c.jwtToken != "" && !isAuthEndpoint(path)
+		if jwtUsed && allowRetry && c.signer != nil {
+			if err := c.refreshJWTToken(); err != nil {
+				return nil, fmt.Errorf("JWT token refresh failed: %w", err)
 			}
+			// Retry the request once with the new token (no further retries)
+			return c.doRequestWithRetry(method, path, body, requireAPIKey, false)
+		}
+		// Preserve previous behavior for explicit invalid JWT cases when we can't refresh.
+		if jwtUsed && strings.Contains(respStr, "Invalid JWT") {
 			return nil, fmt.Errorf("%w: %s", errs.ErrJWTTokenExpired, respStr)
 		}
 		return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, respStr)
