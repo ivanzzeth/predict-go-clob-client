@@ -37,6 +37,47 @@ func (c *Client) GetAccount() (*types.Account, error) {
 	return &response.Data, nil
 }
 
+// SetReferral sets a referral code for the authenticated user.
+// The referral code must be exactly 5 characters long.
+// Returns error if the user already has a referral code set.
+// Requires JWT token authentication.
+func (c *Client) SetReferral(referralCode string) error {
+	if err := c.requireJWTToken(); err != nil {
+		return err
+	}
+
+	if len(referralCode) != 5 {
+		return fmt.Errorf("referral code must be exactly 5 characters, got %d", len(referralCode))
+	}
+
+	reqBody := types.SetReferralRequest{
+		Data: types.SetReferralData{
+			ReferralCode: referralCode,
+		},
+	}
+
+	bodyBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		return fmt.Errorf("failed to marshal referral request: %w", err)
+	}
+
+	respBody, err := c.doRequest("POST", constants.EndpointAccountReferral, bodyBytes, true)
+	if err != nil {
+		return fmt.Errorf("failed to set referral: %w", err)
+	}
+
+	var response types.SetReferralResponse
+	if err := json.Unmarshal(respBody, &response); err != nil {
+		return fmt.Errorf("failed to parse referral response: %w", err)
+	}
+
+	if !response.Success {
+		return fmt.Errorf("API returned success=false for set referral")
+	}
+
+	return nil
+}
+
 // GetPositions gets positions for the authenticated user
 // Requires JWT token authentication
 // Calculates Locked and Available amounts based on OPEN SELL orders
