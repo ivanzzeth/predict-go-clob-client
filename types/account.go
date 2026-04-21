@@ -9,16 +9,22 @@ import (
 
 // Account represents user account information
 type Account struct {
-	Name     string    `json:"name"`
+	Name     string         `json:"name"`
 	Address  common.Address `json:"address"`
-	ImageURL *string   `json:"imageUrl,omitempty"` // nullable
-	Referral *Referral `json:"referral,omitempty"`
+	ImageURL *string        `json:"imageUrl,omitempty"` // nullable
+	Referral *Referral      `json:"referral,omitempty"`
+	Points   *Points        `json:"points,omitempty"`
 }
 
 // Referral represents referral information
 type Referral struct {
 	Code   *string        `json:"code"` // nullable
 	Status ReferralStatus `json:"status"`
+}
+
+// Points represents user points information
+type Points struct {
+	Total float64 `json:"total"`
 }
 
 // UnmarshalJSON implements custom unmarshaling for Account to handle null values and Address conversion
