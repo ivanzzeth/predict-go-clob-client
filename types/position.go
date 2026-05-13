@@ -68,3 +68,10 @@ type GetPositionsOptions struct {
 	First    int    // Limit for pagination
 	After    string // Cursor for pagination
 }
+
+// GetPositionsResponse represents the response from GetPositions API
+type GetPositionsResponse struct {
+	Success bool            `json:"success"`
+	Cursor  *string         `json:"cursor,omitempty"` // nullable, present when more pages exist
+	Data    []Position      `json:"data"`
+}

@@ -78,7 +78,7 @@ func (c *Client) SetReferral(referralCode string) error {
 	return nil
 }
 
-// GetPositions gets positions for the authenticated user
+// GetPositions gets ALL positions for the authenticated user (auto-paginates)
 // Requires JWT token authentication
 // Calculates Locked and Available amounts based on OPEN SELL orders
 func (c *Client) GetPositions(opts *types.GetPositionsOptions) ([]types.Position, error) {
@@ -86,40 +86,55 @@ func (c *Client) GetPositions(opts *types.GetPositionsOptions) ([]types.Position
 		return nil, err
 	}
 
-	path := constants.EndpointPositions
-
-	params := url.Values{}
+	// Determine page size: default to 20 if not specified
+	first := 20
+	var after string
+	var marketID types.MarketID
 	if opts != nil {
-		if !opts.MarketID.IsZero() {
-			params.Set("marketId", opts.MarketID.String())
-		}
+		marketID = opts.MarketID
 		if opts.First > 0 {
-			params.Set("first", fmt.Sprintf("%d", opts.First))
+			first = opts.First
 		}
-		if opts.After != "" {
-			params.Set("after", opts.After)
-		}
+		after = opts.After
 	}
 
-	if len(params) > 0 {
+	// Auto-paginate: collect all positions across pages
+	var allPositions []types.Position
+
+	for {
+		path := constants.EndpointPositions
+		params := url.Values{}
+		params.Set("first", fmt.Sprintf("%d", first))
+		if !marketID.IsZero() {
+			params.Set("marketId", marketID.String())
+		}
+		if after != "" {
+			params.Set("after", after)
+		}
 		path += "?" + params.Encode()
-	}
 
-	respBody, err := c.doRequest("GET", path, nil, true)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get positions: %w", err)
-	}
+		respBody, err := c.doRequest("GET", path, nil, true)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get positions: %w", err)
+		}
 
-	var response types.APIBaseResponse[[]types.Position]
-	if err := json.Unmarshal(respBody, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse positions response: %w", err)
-	}
+		var response types.GetPositionsResponse
+		if err := json.Unmarshal(respBody, &response); err != nil {
+			return nil, fmt.Errorf("failed to parse positions response: %w", err)
+		}
 
-	if !response.Success {
-		return nil, fmt.Errorf("API returned success=false: %s", response.Message)
-	}
+		if !response.Success {
+			return nil, fmt.Errorf("API returned success=false")
+		}
 
-	positions := response.Data
+		allPositions = append(allPositions, response.Data...)
+
+		// Check if there are more pages
+		if response.Cursor == nil || *response.Cursor == "" {
+			break
+		}
+		after = *response.Cursor
+	}
 
 	// Get all OPEN orders to calculate locked amounts
 	openOrdersOpts := &types.GetOrdersOptions{
@@ -128,12 +143,12 @@ func (c *Client) GetPositions(opts *types.GetPositionsOptions) ([]types.Position
 	openOrdersResp, err := c.GetOrders(openOrdersOpts)
 	if err != nil {
 		// If we can't get orders, return positions with Locked=0 and Available=Total
-		for i := range positions {
-			positions[i].Total = positions[i].Amount
-			positions[i].Locked = decimal.Zero
-			positions[i].Available = positions[i].Amount
+		for i := range allPositions {
+			allPositions[i].Total = allPositions[i].Amount
+			allPositions[i].Locked = decimal.Zero
+			allPositions[i].Available = allPositions[i].Amount
 		}
-		return positions, nil
+		return allPositions, nil
 	}
 
 	// Build a map of locked amounts by (marketID, tokenID)
@@ -147,23 +162,23 @@ func (c *Client) GetPositions(opts *types.GetPositionsOptions) ([]types.Position
 	}
 
 	// Calculate Locked and Available for each position
-	for i := range positions {
-		positions[i].Total = positions[i].Amount
+	for i := range allPositions {
+		allPositions[i].Total = allPositions[i].Amount
 
 		// Find locked amount for this position's market and outcome
-		key := fmt.Sprintf("%s:%s", positions[i].Market.ID.String(), string(positions[i].Outcome.OnChainID))
+		key := fmt.Sprintf("%s:%s", allPositions[i].Market.ID.String(), string(allPositions[i].Outcome.OnChainID))
 		locked := lockedMap[key]
 
-		positions[i].Locked = locked
-		positions[i].Available = positions[i].Total.Sub(locked)
+		allPositions[i].Locked = locked
+		allPositions[i].Available = allPositions[i].Total.Sub(locked)
 
 		// Ensure Available is not negative
-		if positions[i].Available.IsNegative() {
-			positions[i].Available = decimal.Zero
+		if allPositions[i].Available.IsNegative() {
+			allPositions[i].Available = decimal.Zero
 		}
 	}
 
-	return positions, nil
+	return allPositions, nil
 }
 
 // GetActivity gets account activity including orders, matches, conversions, merges, and splits
